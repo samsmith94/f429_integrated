@@ -22,6 +22,8 @@
 #include <ArduinoHttpClient.h>
 #include <CRC32.h>                //unzipLIB-el probléma lesz!!!
 
+
+
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
 
@@ -71,6 +73,12 @@ uint32_t   knownFileSize = 22820 ;  // In case server does not send it
 TinyGsm        modem(SerialAT);
 TinyGsmClient client(modem);
 HttpClient    http(client, server, port);
+
+
+
+// Set phone numbers, if you want to test SMS and Calls
+#define SMS_TARGET  "+36706347173"
+#define CALL_TARGET "+36706347173"
 
 /******************************************************************************/
 
@@ -127,6 +135,7 @@ AccelStepper stepper1(AccelStepper::DRIVER, STEPPER_1_STEP, STEPPER_1_DIR);
 AccelStepper stepper3(AccelStepper::DRIVER, STEPPER_3_STEP, STEPPER_3_DIR);
 
 
+/******************************************************************************/
 void button_ISR()
 {
   Serial.println("Reset by USER_BUTTON");
@@ -188,6 +197,7 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println("Water minilab");
+
 
   servo1.attach(SERVO_1_PWM);
   servo2.attach(SERVO_2_PWM);
@@ -430,6 +440,21 @@ void setup()
   SerialMon.println(" success");
 
   if (modem.isGprsConnected()) { SerialMon.println("GPRS connected"); }
+
+  /*********************************************************************/
+
+
+  /*********************************************************************/
+  // SMS
+  String imei = modem.getIMEI();
+  bool res = modem.sendSMS(SMS_TARGET, String("Hello from ") + imei);
+  SerialMon.print("SMS: ");
+  if (res)
+  {
+    SerialMon.println("OK");
+  } else {
+    SerialMon.println("fail");
+  }
 
   /*********************************************************************/
   // NIST time
