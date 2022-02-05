@@ -68,14 +68,7 @@ TinyGsm        modem(SerialAT);
 TinyGsmClient client(modem);
 HttpClient    http(client, server, port);
 
-#define MODEM_PWRKEY PD15
-
 /******************************************************************************/
-/******************************************************************************/
-
-
-#define ACTIVE_LED BLUE_LED
-
 
 /* Get the rtc object */
 STM32RTC &rtc = STM32RTC::getInstance();
@@ -118,11 +111,49 @@ AccelStepper stepper3(AccelStepper::DRIVER, STEPPER_3_STEP, STEPPER_3_DIR);
 
 void button_ISR()
 {
-  Serial.println("Reset");
+  Serial.println("Reset by USER_BUTTON");
   HAL_NVIC_SystemReset();
 }
 
+void sw1_ISR()
+{
+  Serial.println("SW1 interrupt");
+}
 
+void sw2_ISR()
+{
+  Serial.println("SW2 interrupt");
+}
+
+void sw3_ISR()
+{
+  Serial.println("SW3 interrupt");
+}
+
+void sw4_ISR()
+{
+  Serial.println("SW4 interrupt");
+}
+
+void sw5_ISR()
+{
+  Serial.println("SW5 interrupt");
+}
+
+void sw6_ISR()
+{
+  Serial.println("SW6 interrupt");
+}
+
+void sw7_ISR()
+{
+  Serial.println("SW7 interrupt");
+}
+
+void sw8_ISR()
+{
+  Serial.println("SW8 interrupt");
+}
 void setup()
 {
   Serial.begin(115200);
@@ -162,7 +193,23 @@ void setup()
   pinMode(USER_BUTTON, INPUT);
   attachInterrupt(digitalPinToInterrupt(USER_BUTTON), button_ISR, FALLING);
 
-  
+  pinMode(SW1, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW1), sw1_ISR, FALLING);
+  pinMode(SW2, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW2), sw2_ISR, FALLING);
+  pinMode(SW3, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW3), sw3_ISR, FALLING);
+  pinMode(SW4, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW4), sw4_ISR, FALLING);
+  pinMode(SW5, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW5), sw5_ISR, FALLING);
+  pinMode(SW6, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW6), sw6_ISR, FALLING);
+  pinMode(SW7, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW7), sw7_ISR, FALLING);
+  pinMode(SW8, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW8), sw8_ISR, FALLING);
+
   Serial.println("- testing DC pumps");
   dc_pump_2.setSpeed(255);
   dc_pump_2.forward();
@@ -176,7 +223,6 @@ void setup()
   delay(3000);
   dc_pump_2.stop();
  
-
 
   Serial.println("- testing relays");
 	relay1.turnOff(); //turns relay off
