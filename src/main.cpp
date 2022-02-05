@@ -70,6 +70,20 @@ HttpClient    http(client, server, port);
 
 /******************************************************************************/
 
+SPIClass SPI_4(SD_CARD_MOSI, SD_CARD_MISO, SD_CARD_SCK); // MOSI, MISO. SCLK
+
+const uint8_t SD_CS_PIN = SD_CARD_CS;
+
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(4), &SPI_4)
+
+
+SdFat sd;
+File file;
+File root;
+
+
+/******************************************************************************/
+
 /* Get the rtc object */
 STM32RTC &rtc = STM32RTC::getInstance();
 
@@ -259,14 +273,88 @@ void setup()
     delay(3);
   }
 
-  Serial.println("- testing steppers");
-  stepper1.setMaxSpeed(3000.0);
-  stepper1.setAcceleration(3000.0);
-  stepper1.moveTo(100);
+  // Serial.println("- testing steppers");
+  // stepper1.setMaxSpeed(3000.0);
+  // stepper1.setAcceleration(3000.0);
+  // stepper1.moveTo(100);
+  
+  
+  Serial.println("- testing SD card");
+  // Initialize the SD card.
+  if (!sd.begin(SD_CONFIG))
+  {
+    sd.initErrorHalt(&Serial);
+  }
 
-  // stepper3.setMaxSpeed(3000.0);
-  // stepper3.setAcceleration(3000.0);
-  // stepper3.moveTo(100);
+  if (!root.open("/"))
+  {
+    Serial.println("Open root failed");
+  }
+
+  //először el kell távolítani a már létező fájlokat!!!, emiatt nem működött először
+  if (sd.exists("Folder1"))
+  {
+    if (sd.exists("Folder1/file1.txt"))
+    {
+      Serial.println("Folder1/file1.txt is already existing");
+
+      // Change volume working directory to Folder1.
+      if (!sd.chdir("Folder1"))
+      {
+        Serial.println("chdir failed for Folder1.");
+      }
+      Serial.println("chdir to Folder1");
+
+      // Remove files from current directory.
+      if (!sd.remove("file1.txt"))
+      {
+        Serial.println("remove failed");
+      }
+      Serial.println("file1.txt removed.");
+
+      // Change current directory to root.
+      if (!sd.chdir())
+      {
+        Serial.println("chdir to root failed.");
+      }
+
+      // Remove Folder1.
+      if (!sd.rmdir("Folder1"))
+      {
+        Serial.println("rmdir for Folder1 failed");
+      }
+      Serial.println("Folder1 removed.");
+    }
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  // Create a new folder.
+  if (!sd.mkdir("Folder1"))
+  {
+    Serial.println("Create Folder1 failed");
+  }
+
+  if (!sd.mkdir("Folder2"))
+  {
+    Serial.println("Create Folder2 failed");
+  }
+
+  // Create a file in Folder1 using a path.
+  if (!file.open("Folder1/file1.txt", O_WRONLY | O_CREAT))
+  {
+    Serial.println("Create Folder1/file1.txt failed");
+  }
+  Serial.println("Created Folder1/file1.txt");
+  file.println("Hello 1, 2, 3");
+  Serial.println("Hello 1, 2, 3 written to Folder1/file1.txt");
+
+  Serial.print("Size of Folder1/file1.txt: ");
+  Serial.println(file.fileSize());
+
+  file.close();
+  Serial.println("Folder1/file1.txt closed");
+  Serial.println("****************************************");
 
   //////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////////
