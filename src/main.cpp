@@ -432,6 +432,34 @@ void setup()
   if (modem.isGprsConnected()) { SerialMon.println("GPRS connected"); }
 
   /*********************************************************************/
+  // NIST time
+  modem.NTPServerSync("132.163.96.5", 20);
+
+  int   year3    = 0;
+  int   month3   = 0;
+  int   day3     = 0;
+  int   hour3    = 0;
+  int   min3     = 0;
+  int   sec3     = 0;
+  float timezone = 0;
+  for (int8_t i = 5; i; i--) {
+    SerialMon.println("Requesting current network time");
+    if (modem.getNetworkTime(&year3, &month3, &day3, &hour3, &min3, &sec3,
+                             &timezone)) {
+      // DBG("Year:", year3, "\tMonth:", month3, "\tDay:", day3);
+      // DBG("Hour:", hour3, "\tMinute:", min3, "\tSecond:", sec3);
+      // DBG("Timezone:", timezone);
+      break;
+    } else {
+      SerialMon.println("Couldn't get network time, retrying in 15s.");
+      delay(15000L);
+    }
+  }
+  SerialMon.println("Retrieving time again as a string");
+  String time = modem.getGSMDateTime(DATE_FULL);
+  SerialMon.print("Current Network Time:"); SerialMon.println(time);
+
+  /*********************************************************************/
   // HTTP download zip
 
   SerialMon.print(F("Connecting to "));
