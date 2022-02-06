@@ -21,7 +21,7 @@
 #include <TinyGsmClient.h>
 #include <ArduinoHttpClient.h>
 #include <CRC32.h>                //unzipLIB-el probléma lesz!!!
-
+#include <PubSubClient.h>
 
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
@@ -69,17 +69,33 @@ const char zip_resource[]    = "/download";
 uint32_t   knownCRC32    = 0xa26a7a0a;
 uint32_t   knownFileSize = 22820 ;  // In case server does not send it
 
+// MQTT details
+const char* broker = "broker.hivemq.com";
+const char* topicLed       = "GsmClientTest/led";
+const char* topicInit      = "GsmClientTest/init";
+const char* topicLedStatus = "GsmClientTest/ledStatus";
 
+int ledStatus = LOW;
+
+uint32_t lastReconnectAttempt = 0;
+
+
+//for HTTP
 TinyGsm        modem(SerialAT);
-TinyGsmClient client(modem);
-HttpClient    http(client, server, port);
+TinyGsmClient client_1(modem, 1);
+HttpClient    http(client_1, server, port);
 
+//for MQTT
+TinyGsmClient client_2(modem, 2);
+PubSubClient  mqtt(client_2);
 
 
 // Set phone numbers, if you want to test SMS and Calls
 #define SMS_TARGET  "+36706347173"
 #define CALL_TARGET "+36706347173"
 
+
+#define LED_PIN BLUE_LED
 /******************************************************************************/
 
 SPIClass SPI_4(SD_CARD_MOSI, SD_CARD_MISO, SD_CARD_SCK); // MOSI, MISO. SCLK
@@ -192,6 +208,45 @@ void printPercent(uint32_t readLength, uint32_t contentLength) {
     SerialMon.println(readLength);
   }
 }
+
+
+
+void mqttCallback(char* topic, byte* payload, unsigned int len) {
+  SerialMon.print("Message arrived [");
+  SerialMon.print(topic);
+  SerialMon.print("]: ");
+  SerialMon.write(payload, len);
+  SerialMon.println();
+
+  // Only proceed if incoming message's topic matches
+  if (String(topic) == topicLed) {
+    ledStatus = !ledStatus;
+    digitalWrite(LED_PIN, ledStatus);
+    mqtt.publish(topicLedStatus, ledStatus ? "1" : "0");
+  }
+}
+
+boolean mqttConnect() {
+  SerialMon.print("Connecting to ");
+  SerialMon.print(broker);
+
+  // Connect to MQTT Broker
+  boolean status = mqtt.connect("GsmClientTest");
+
+  // Or, if you want to authenticate MQTT:
+  // boolean status = mqtt.connect("GsmClientName", "mqtt_user", "mqtt_pass");
+
+  if (status == false) {
+    SerialMon.println(" fail");
+    return false;
+  }
+  SerialMon.println(" success");
+  mqtt.publish(topicInit, "GsmClientTest started");
+  mqtt.subscribe(topicLed);
+  return mqtt.connected();
+}
+
+
 
 void setup()
 {
@@ -442,8 +497,13 @@ void setup()
   if (modem.isGprsConnected()) { SerialMon.println("GPRS connected"); }
 
   /*********************************************************************/
+  // MQTT
+  // MQTT Broker setup
+  mqtt.setServer(broker, 1883);
+  mqtt.setCallback(mqttCallback);
 
-
+  pinMode(LED_PIN, OUTPUT);
+  
   /*********************************************************************/
   // SMS
   String imei = modem.getIMEI();
@@ -489,7 +549,7 @@ void setup()
 
   SerialMon.print(F("Connecting to "));
   SerialMon.print(server);
-  if (!client.connect(server, port)) {
+  if (!client_1.connect(server, port)) {
     SerialMon.println(" fail");
     delay(10000);
     return;
@@ -497,9 +557,9 @@ void setup()
   SerialMon.println(" success");
 
   // Make a HTTP GET request:
-  client.print(String("GET ") + zip_resource + " HTTP/1.0\r\n");
-  client.print(String("Host: ") + server + "\r\n");
-  client.print("Connection: close\r\n\r\n");
+  client_1.print(String("GET ") + zip_resource + " HTTP/1.0\r\n");
+  client_1.print(String("Host: ") + server + "\r\n");
+  client_1.print("Connection: close\r\n\r\n");
 
   // Let's see what the entire elapsed time is, from after we send the request.
   uint32_t timeElapsed = millis();
@@ -520,10 +580,10 @@ void setup()
   while (!finishedHeader) {
     int nlPos;
 
-    if (client.available()) {
+    if (client_1.available()) {
       clientReadStartTime = millis();
-      while (client.available()) {
-        char c = client.read();
+      while (client_1.available()) {
+        char c = client_1.read();
         headerBuffer += c;
 
         // Uncomment the lines below to see the data coming into the buffer
@@ -585,10 +645,10 @@ void setup()
     clientReadStartTime = millis();
 
     printPercent(readLength, contentLength);
-    while (readLength < contentLength && client.connected() &&
+    while (readLength < contentLength && client_1.connected() &&
            millis() - clientReadStartTime < clientReadTimeout) {
-      while (client.available()) {
-        uint8_t c = client.read();
+      while (client_1.available()) {
+        uint8_t c = client_1.read();
         // SerialMon.print(reinterpret_cast<char>c);  // Uncomment this to show
         // data
         crc.update(c);
@@ -607,7 +667,7 @@ void setup()
 
   // Shutdown
 
-  //client.stop();
+  //client_1.stop();
   //SerialMon.println(F("Server disconnected"));
 
   //modem.gprsDisconnect();
@@ -692,14 +752,14 @@ void setup()
   /*********************************************************************/
 
   // Shutdown
-  http.stop();
-  SerialMon.println(F("Server disconnected"));
+  // http.stop();
+  // SerialMon.println(F("Server disconnected"));
 
-  modem.gprsDisconnect();
-  SerialMon.println(F("GPRS disconnected"));
+  // modem.gprsDisconnect();
+  // SerialMon.println(F("GPRS disconnected"));
 
   // Do nothing forevermore
-  while (true) { delay(1000); }
+  //while (true) { delay(1000); }
 }
 
 
@@ -731,4 +791,45 @@ void loop()
   // }
   // stepper1.run();
 
+
+  // MQTT LOOP
+  // Make sure we're still registered on the network
+  if (!modem.isNetworkConnected()) {
+    SerialMon.println("Network disconnected");
+    if (!modem.waitForNetwork(180000L, true)) {
+      SerialMon.println(" fail");
+      delay(10000);
+      return;
+    }
+    if (modem.isNetworkConnected()) {
+      SerialMon.println("Network re-connected");
+    }
+
+    // and make sure GPRS/EPS is still connected
+    if (!modem.isGprsConnected()) {
+      SerialMon.println("GPRS disconnected!");
+      SerialMon.print(F("Connecting to "));
+      SerialMon.print(apn);
+      if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
+        SerialMon.println(" fail");
+        delay(10000);
+        return;
+      }
+      if (modem.isGprsConnected()) { SerialMon.println("GPRS reconnected"); }
+    }
+  }
+
+  if (!mqtt.connected()) {
+    SerialMon.println("=== MQTT NOT CONNECTED ===");
+    // Reconnect every 10 seconds
+    uint32_t t = millis();
+    if (t - lastReconnectAttempt > 10000L) {
+      lastReconnectAttempt = t;
+      if (mqttConnect()) { lastReconnectAttempt = 0; }
+    }
+    delay(100);
+    return;
+  }
+
+  mqtt.loop();
 }
