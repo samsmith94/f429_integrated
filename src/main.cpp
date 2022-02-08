@@ -23,10 +23,7 @@
 #include <CRC32.h>
 #include <PubSubClient.h>
 
-
-
 /******************************************************************************/
-
 
 #define BUFF_SIZE 1024
 static uint8_t l_Buff[BUFF_SIZE];
@@ -79,19 +76,20 @@ int32_t mySeek(void *p, int32_t position, int iType) {
   }
 }
 
-
-
 /******************************************************************************/
-uint8_t dayofweek(uint8_t y, uint8_t m, uint8_t d)
-{
-    uint8_t x = y + 24 - (m < 3);
-    x = x + (x >> 2) + d - m;
-    if (m & 1)
-        x += (m & 8) ? 4 : 3;
-    if (m < 3)
-        x += 3;
-
-    return x % 7;
+const int dayofweek(int year, int month, int day) {
+  /* using C99 compound literals in a single line: notice the splicing */
+  return ((const int [])                                         \
+          {1, 2, 3, 4, 5, 6, 0})[           \
+      (                                                            \
+          day                                                      \
+        + ((153 * (month + 12 * ((14 - month) / 12) - 3) + 2) / 5) \
+        + (365 * (year + 4800 - ((14 - month) / 12)))              \
+        + ((year + 4800 - ((14 - month) / 12)) / 4)                \
+        - ((year + 4800 - ((14 - month) / 12)) / 100)              \
+        + ((year + 4800 - ((14 - month) / 12)) / 400)              \
+        - 32045                                                    \
+      ) % 7];
 }
 
 /******************************************************************************/
@@ -182,7 +180,6 @@ STM32RTC &rtc = STM32RTC::getInstance();
 // const byte month = 6;
 // const byte year = 15;
 
-
 /******************************************************************************/
 
 Servo servo1;
@@ -260,7 +257,7 @@ void printPercent(uint32_t readLength, uint32_t contentLength) {
   if (contentLength != (uint32_t)-1) {
     SerialMon.print("\r ");
     SerialMon.print((100.0 * readLength) / contentLength);
-    SerialMon.print('%');
+    SerialMon.println('%');
   } else {
     SerialMon.println(readLength);
   }
@@ -789,6 +786,7 @@ void setup()
   http.println("{\"num\": \"15\"}");
   
   http.endRequest();
+  http.write((const byte*)"\r\n", 2);
 
   status = http.responseStatusCode();
   //int status = http.responseStatusCode();
@@ -805,10 +803,6 @@ void setup()
 
   // Do nothing forevermore
   //while (true) { delay(1000); }
-
-
-
-
 
   /*********************************************************************/
   
@@ -902,24 +896,22 @@ void setup()
   // rtc.setMonth(month3);
   // rtc.setYear(year3);
 
-
-  
+  Serial.print("YEAR: "); Serial.println(year3);
   uint8_t weekDay = dayofweek(year3, month3, day3);
-  // Serial.print("weekDay = "); Serial.println(weekDay); //NEM JÓL MŰKÖDIK EZ A WEEKDAY
+  Serial.print("weekDay = "); Serial.println(weekDay); //NEM JÓL MŰKÖDIK EZ A WEEKDAY
   // you can use also
   rtc.setTime(hour3, min3, sec3);
-  rtc.setDate(weekDay, day3, month3, year3);
-
+  rtc.setDate(weekDay, day3, month3, year3-2000);
+  
   /****************************************************************************/
 }
-
 
 void loop()
 {
   // Print date...
-  Serial.printf("%02d/%02d/%02d ", rtc.getDay(), rtc.getMonth(), rtc.getYear());
+  Serial.printf("%02d/%02d/%02d ", rtc.getYear(), rtc.getMonth(), rtc.getDay());
   // ...and time
-  Serial.printf("%02d:%02d:%02d.%03d\n", rtc.getHours(), rtc.getMinutes(), rtc.getSeconds(), rtc.getSubSeconds());
+  Serial.printf("%02d:%02d:%02d\n", rtc.getHours(), rtc.getMinutes(), rtc.getSeconds());
   delay(1000);
 
   // Serial.println("- testing DC pumps");
