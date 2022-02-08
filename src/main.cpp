@@ -773,10 +773,11 @@ void setup()
   SerialMon.println(body.length());
 
   /*********************************************************************/
+  delay(1000);
   // HTTP POST request
   SerialMon.print(F("\r\nPerforming HTTP POST request... "));
 
-  http.connectionKeepAlive();
+  //http.connectionKeepAlive();
   http.beginRequest();
   int codePost = http.post("/upload");
 
