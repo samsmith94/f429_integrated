@@ -43,6 +43,8 @@ static File myfile;
 static File myfileAnother;
 static File binFile;
 
+static File downloadedZIPFile;
+
 void * myOpen(const char *filename, int32_t *size) {
   root.open("/");
   myfileAnother.open(filename);
@@ -80,7 +82,19 @@ int32_t mySeek(void *p, int32_t position, int iType) {
 
 
 /******************************************************************************/
+uint8_t dayofweek(uint8_t y, uint8_t m, uint8_t d)
+{
+    uint8_t x = y + 24 - (m < 3);
+    x = x + (x >> 2) + d - m;
+    if (m & 1)
+        x += (m & 8) ? 4 : 3;
+    if (m < 3)
+        x += 3;
 
+    return x % 7;
+}
+
+/******************************************************************************/
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
@@ -124,8 +138,8 @@ const char server[]   = "water-minilab.herokuapp.com";  //nem lehet előtte http
 const int  port       = 80;
 
 const char zip_resource[]    = "/download";
-uint32_t   knownCRC32    = 0xa26a7a0a;
-uint32_t   knownFileSize = 22820 ;  // In case server does not send it
+uint32_t   knownCRC32    = 0xdc6dd831;
+uint32_t   knownFileSize = 50338  ;  // In case server does not send it
 
 // MQTT details
 const char* broker = "broker.hivemq.com";
@@ -156,18 +170,20 @@ PubSubClient  mqtt(client_2);
 /* Get the rtc object */
 STM32RTC &rtc = STM32RTC::getInstance();
 
-/* Change these values to set the current initial time */
-const byte seconds = 0;
-const byte minutes = 0;
-const byte hours = 16;
+// /* Change these values to set the current initial time */
+// const byte seconds = 0;
+// const byte minutes = 0;
+// const byte hours = 16;
 
-/* Change these values to set the current initial date */
-/* Monday 15th June 2015 */
-const byte weekDay = 1;
-const byte day = 15;
-const byte month = 6;
-const byte year = 15;
+// /* Change these values to set the current initial date */
+// /* Monday 15th June 2015 */
+// const byte weekDay = 1;
+// const byte day = 15;
+// const byte month = 6;
+// const byte year = 15;
 
+
+/******************************************************************************/
 
 Servo servo1;
 Servo servo2;
@@ -298,27 +314,7 @@ void setup()
   mosfet1.begin();
   mosfet2.begin();
 
-  Serial.println("- configure RTC");
-  // Select RTC clock source: LSI_CLOCK, LSE_CLOCK or HSE_CLOCK.
-  // By default the LSI is selected as source.
-  rtc.setClockSource(STM32RTC::LSE_CLOCK);
-
-  rtc.begin(); // initialize RTC 24H format
-
-  // Set the time
-  rtc.setHours(hours);
-  rtc.setMinutes(minutes);
-  rtc.setSeconds(seconds);
-
-  // Set the date
-  rtc.setWeekDay(weekDay);
-  rtc.setDay(day);
-  rtc.setMonth(month);
-  rtc.setYear(year);
-
-  // you can use also
-  rtc.setTime(hours, minutes, seconds);
-  rtc.setDate(weekDay, day, month, year);
+  /****************************************************************************/
 
   pinMode(USER_BUTTON, INPUT);
   attachInterrupt(digitalPinToInterrupt(USER_BUTTON), button_ISR, FALLING);
@@ -473,77 +469,6 @@ void setup()
   Serial.println("****************************************");
 
 
-  // Create a application.bin file to write RAM to SD card
-  if (!binFile.open("application.bin", O_WRONLY | O_CREAT))
-  {
-    Serial.println("Create application.bin failed");
-  }
-  else
-  {
-    Serial.println("application.bin created");
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
-  int rc;
-  char szComment[256], szName[256];
-  unz_file_info fi;
-
-  const char *name = "application.zip";
-  if (!myfile.open(name, O_RDONLY))
-  {
-    Serial.println("Opening application.zip failed");
-  }
-  Serial.println("Openened application.zip");
-  rc = rc = zip.openZIP(name, myOpen, myClose, myRead, mySeek);
-  if (rc == UNZ_OK) {
-    Serial.println("ZIP file found!");
-
-    // Display the global comment and all of the filenames within
-    rc = zip.getGlobalComment(szComment, sizeof(szComment));
-    Serial.print("Files in this archive: ");
-    zip.gotoFirstFile();
-    rc = UNZ_OK;
-    rc = zip.getFileInfo(&fi, szName, sizeof(szName), NULL, 0, szComment, sizeof(szComment));
-
-    if (rc == UNZ_OK) {
-      Serial.println(szName);
-      Serial.print("Compressed size: "); Serial.println(fi.compressed_size, DEC);
-      Serial.print("Uncompressed size: "); Serial.println(fi.uncompressed_size, DEC);
-      
-    }
-
-    zip.locateFile("application.bin");
-    zip.openCurrentFile();
-
-    int counter = 0;
-    int number_of_chunks = (fi.uncompressed_size / BUFF_SIZE);
-    int rc, i;
-    rc = 1;
-    i = 0;
-    while (rc > 0) {
-        if (counter == number_of_chunks) {
-          break;
-        }
-        rc = zip.readCurrentFile(l_Buff, BUFF_SIZE);
-        binFile.write(l_Buff, BUFF_SIZE);
-        counter++;
-        if (rc >= 0) {
-            i += rc;
-        } else {
-            Serial.println("Error reading from file");
-            break;
-        }
-    }
-    Serial.print("Total bytes read = ");
-    Serial.println(i);
-    
-    zip.closeCurrentFile();
-    zip.closeZIP();
-
-    binFile.close();
-    Serial.println("Now you can remove SD card.");
-  }
-
   //////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////////
   Serial.println("- testing GSM HTTP GET and POST");
@@ -653,6 +578,17 @@ void setup()
   /*********************************************************************/
   // HTTP download zip
 
+  // Create a application.bin file to write RAM to SD card
+  if (!downloadedZIPFile.open("application.zip", O_WRONLY | O_CREAT))
+  {
+    Serial.println("Create application.zip failed");
+  }
+  else
+  {
+    Serial.println("application.zip created");
+  }
+
+  /////////////////////
   SerialMon.print(F("Connecting to "));
   SerialMon.print(server);
   if (!client_1.connect(server, port)) {
@@ -677,7 +613,7 @@ void setup()
   // line (data FOLLOWED by a newline). If it takes too long to get data from
   // the client, we need to exit.
 
-  const uint32_t clientReadTimeout   = 5000;
+  const uint32_t clientReadTimeout   = 15000;
   uint32_t       clientReadStartTime = millis();
   String         headerBuffer;
   bool           finishedHeader = false;
@@ -755,6 +691,7 @@ void setup()
            millis() - clientReadStartTime < clientReadTimeout) {
       while (client_1.available()) {
         uint8_t c = client_1.read();
+        downloadedZIPFile.write(c);
         // SerialMon.print(reinterpret_cast<char>c);  // Uncomment this to show
         // data
         crc.update(c);
@@ -794,6 +731,8 @@ void setup()
   SerialMon.print(duration);
   SerialMon.println("s");
 
+  ///////////////////
+  downloadedZIPFile.close();
   /*********************************************************************/
   // HTTP GET request
 
@@ -866,16 +805,122 @@ void setup()
 
   // Do nothing forevermore
   //while (true) { delay(1000); }
+
+
+
+
+
+  /*********************************************************************/
+  
+  // Create a application.bin file to write RAM to SD card
+  if (!binFile.open("application.bin", O_WRONLY | O_CREAT))
+  {
+    Serial.println("Create application.bin failed");
+  }
+  else
+  {
+    Serial.println("application.bin created");
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  int rc;
+  char szComment[256], szName[256];
+  unz_file_info fi;
+
+  const char *name = "application.zip";
+  if (!myfile.open(name, O_RDONLY))
+  {
+    Serial.println("Opening application.zip failed");
+  }
+  Serial.println("Openened application.zip");
+  rc = rc = zip.openZIP(name, myOpen, myClose, myRead, mySeek);
+  if (rc == UNZ_OK) {
+    Serial.println("ZIP file found!");
+
+    // Display the global comment and all of the filenames within
+    rc = zip.getGlobalComment(szComment, sizeof(szComment));
+    Serial.print("Files in this archive: ");
+    zip.gotoFirstFile();
+    rc = UNZ_OK;
+    rc = zip.getFileInfo(&fi, szName, sizeof(szName), NULL, 0, szComment, sizeof(szComment));
+
+    if (rc == UNZ_OK) {
+      Serial.println(szName);
+      Serial.print("Compressed size: "); Serial.println(fi.compressed_size, DEC);
+      Serial.print("Uncompressed size: "); Serial.println(fi.uncompressed_size, DEC);
+      
+    }
+
+    zip.locateFile("application.bin");
+    zip.openCurrentFile();
+
+    int counter = 0;
+    int number_of_chunks = (fi.uncompressed_size / BUFF_SIZE);
+    int rc, i;
+    rc = 1;
+    i = 0;
+    while (rc > 0) {
+        if (counter == number_of_chunks) {
+          break;
+        }
+        rc = zip.readCurrentFile(l_Buff, BUFF_SIZE);
+        binFile.write(l_Buff, BUFF_SIZE);
+        counter++;
+        if (rc >= 0) {
+            i += rc;
+        } else {
+            Serial.println("Error reading from file");
+            break;
+        }
+    }
+    Serial.print("Total bytes read = ");
+    Serial.println(i);
+    
+    zip.closeCurrentFile();
+    zip.closeZIP();
+
+    binFile.close();
+    Serial.println("Now you can remove SD card.");
+  }
+
+  //////////////////////////////////////////////////////////////
+  Serial.println("- configure RTC");
+  // Select RTC clock source: LSI_CLOCK, LSE_CLOCK or HSE_CLOCK.
+  // By default the LSI is selected as source.
+  rtc.setClockSource(STM32RTC::LSE_CLOCK);
+
+  rtc.begin(); // initialize RTC 24H format
+
+  // // Set the time
+  // rtc.setHours(hour3);
+  // rtc.setMinutes(min3);
+  // rtc.setSeconds(sec3);
+
+  // // Set the date
+  // rtc.setWeekDay(weekDay);
+  // rtc.setDay(day3);
+  // rtc.setMonth(month3);
+  // rtc.setYear(year3);
+
+
+  
+  uint8_t weekDay = dayofweek(year3, month3, day3);
+  // Serial.print("weekDay = "); Serial.println(weekDay); //NEM JÓL MŰKÖDIK EZ A WEEKDAY
+  // you can use also
+  rtc.setTime(hour3, min3, sec3);
+  rtc.setDate(weekDay, day3, month3, year3);
+
+  /****************************************************************************/
 }
 
 
 void loop()
 {
-  // // Print date...
-  // Serial.printf("%02d/%02d/%02d ", rtc.getDay(), rtc.getMonth(), rtc.getYear());
-  // // ...and time
-  // Serial.printf("%02d:%02d:%02d.%03d\n", rtc.getHours(), rtc.getMinutes(), rtc.getSeconds(), rtc.getSubSeconds());
-  // delay(1000);
+  // Print date...
+  Serial.printf("%02d/%02d/%02d ", rtc.getDay(), rtc.getMonth(), rtc.getYear());
+  // ...and time
+  Serial.printf("%02d:%02d:%02d.%03d\n", rtc.getHours(), rtc.getMinutes(), rtc.getSeconds(), rtc.getSubSeconds());
+  delay(1000);
 
   // Serial.println("- testing DC pumps");
   // dc_pump_2.setSpeed(255);
@@ -897,45 +942,48 @@ void loop()
   // }
   // stepper1.run();
 
+////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 
-  // MQTT LOOP
-  // Make sure we're still registered on the network
-  if (!modem.isNetworkConnected()) {
-    SerialMon.println("Network disconnected");
-    if (!modem.waitForNetwork(180000L, true)) {
-      SerialMon.println(" fail");
-      delay(10000);
-      return;
-    }
-    if (modem.isNetworkConnected()) {
-      SerialMon.println("Network re-connected");
-    }
+  // // MQTT LOOP
+  // // Make sure we're still registered on the network
+  // if (!modem.isNetworkConnected()) {
+  //   SerialMon.println("Network disconnected");
+  //   if (!modem.waitForNetwork(180000L, true)) {
+  //     SerialMon.println(" fail");
+  //     delay(10000);
+  //     return;
+  //   }
+  //   if (modem.isNetworkConnected()) {
+  //     SerialMon.println("Network re-connected");
+  //   }
 
-    // and make sure GPRS/EPS is still connected
-    if (!modem.isGprsConnected()) {
-      SerialMon.println("GPRS disconnected!");
-      SerialMon.print(F("Connecting to "));
-      SerialMon.print(apn);
-      if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
-        SerialMon.println(" fail");
-        delay(10000);
-        return;
-      }
-      if (modem.isGprsConnected()) { SerialMon.println("GPRS reconnected"); }
-    }
-  }
+  //   // and make sure GPRS/EPS is still connected
+  //   if (!modem.isGprsConnected()) {
+  //     SerialMon.println("GPRS disconnected!");
+  //     SerialMon.print(F("Connecting to "));
+  //     SerialMon.print(apn);
+  //     if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
+  //       SerialMon.println(" fail");
+  //       delay(10000);
+  //       return;
+  //     }
+  //     if (modem.isGprsConnected()) { SerialMon.println("GPRS reconnected"); }
+  //   }
+  // }
 
-  if (!mqtt.connected()) {
-    SerialMon.println("=== MQTT NOT CONNECTED ===");
-    // Reconnect every 10 seconds
-    uint32_t t = millis();
-    if (t - lastReconnectAttempt > 10000L) {
-      lastReconnectAttempt = t;
-      if (mqttConnect()) { lastReconnectAttempt = 0; }
-    }
-    delay(100);
-    return;
-  }
+  // if (!mqtt.connected()) {
+  //   SerialMon.println("=== MQTT NOT CONNECTED ===");
+  //   // Reconnect every 10 seconds
+  //   uint32_t t = millis();
+  //   if (t - lastReconnectAttempt > 10000L) {
+  //     lastReconnectAttempt = t;
+  //     if (mqttConnect()) { lastReconnectAttempt = 0; }
+  //   }
+  //   delay(100);
+  //   return;
+  // }
 
-  mqtt.loop();
+  // mqtt.loop();
 }
