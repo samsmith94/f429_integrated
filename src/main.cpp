@@ -23,6 +23,8 @@
 #include <CRC32.h>
 #include <PubSubClient.h>
 
+#include <ArduinoJson.h>
+
 /******************************************************************************/
 
 #define BUFF_SIZE 1024
@@ -312,6 +314,10 @@ void setup()
   mosfet2.begin();
 
   /****************************************************************************/
+  DynamicJsonDocument doc(64);    //sokat számít a méret!! 1024-el timeout volt!!!
+
+  
+  /****************************************************************************/
 
   pinMode(USER_BUTTON, INPUT);
   attachInterrupt(digitalPinToInterrupt(USER_BUTTON), button_ISR, FALLING);
@@ -534,15 +540,15 @@ void setup()
 
   /*********************************************************************/
   // SMS
-  String imei = modem.getIMEI();
-  bool res = modem.sendSMS(SMS_TARGET, String("Hello from ") + imei);
-  SerialMon.print("SMS: ");
-  if (res)
-  {
-    SerialMon.println("OK");
-  } else {
-    SerialMon.println("fail");
-  }
+  // String imei = modem.getIMEI();
+  // bool res = modem.sendSMS(SMS_TARGET, String("Hello from ") + imei);
+  // SerialMon.print("SMS: ");
+  // if (res)
+  // {
+  //   SerialMon.println("OK");
+  // } else {
+  //   SerialMon.println("fail");
+  // }
 
   /*********************************************************************/
   // NIST time
@@ -774,20 +780,30 @@ void setup()
 
   /*********************************************************************/
   delay(1000);
+  doc["num"] = 15;
+  String payload;
+  serializeJson(doc, payload);
+  Serial.print("POST payload: "); Serial.println(payload);
+  int payloadLength = payload.length();
+  Serial.print("POST payload length: "); Serial.println(payloadLength);
+
+
   // HTTP POST request
   SerialMon.print(F("\r\nPerforming HTTP POST request... "));
 
-  //http.connectionKeepAlive();
+  http.connectionKeepAlive();
   http.beginRequest();
   int codePost = http.post("/upload");
 
   http.sendHeader(F("Content-Type"), F("application/json"));
-  http.sendHeader(F("Content-Length"), 13);
-  http.beginBody();
-  http.println("{\"num\": \"15\"}");
+  //http.sendHeader(F("Content-Length"), 13);
+  http.sendHeader(F("Content-Length"), payloadLength);
   
+  http.beginBody();
+  //http.println("{\"num\": \"15\"}");
+  http.println(payload);
+
   http.endRequest();
-  http.write((const byte*)"\r\n", 2);
 
   status = http.responseStatusCode();
   //int status = http.responseStatusCode();
