@@ -20,6 +20,6 @@ arm-none-eabi-objcopy --input-target=ihex --output-target=binary signed_app.hex 
 del filled.hex
 del signed_app.hex
 
-tar.exe -a -cf application.zip application.bin
+tar.exe -a -cf application.zip application.hex
 
 @REM pause

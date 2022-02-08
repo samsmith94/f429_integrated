@@ -1,17 +1,17 @@
 #include <Arduino.h>
 #include <pins.h>
 
+#include <HexDump.h>
+
 #include <Relay.h>
 #include <MOSFET.h>
 
 #include <Servo.h>
-
 #include <L298N.h>
-
 #include <STM32RTC.h>
-
 #include <AccelStepper.h>
 
+#include <unzipLIB.h>
 #include "SdFat.h"
 #include "sdios.h"
 
@@ -20,8 +20,66 @@
 
 #include <TinyGsmClient.h>
 #include <ArduinoHttpClient.h>
-#include <CRC32.h>                //unzipLIB-el probléma lesz!!!
+#include <CRC32.h>
 #include <PubSubClient.h>
+
+
+
+/******************************************************************************/
+
+
+#define BUFF_SIZE 1024
+static uint8_t l_Buff[BUFF_SIZE];
+
+SPIClass SPI_4(PE6, PE5, PE2); // MOSI, MISO. SCLK
+const uint8_t SD_CS_PIN = PE4;
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(4), &SPI_4)
+
+UNZIP zip; // statically allocate the UNZIP structure (41K)
+SdFat sd;
+File root;
+
+static File myfile;
+static File myfileAnother;
+static File binFile;
+
+void * myOpen(const char *filename, int32_t *size) {
+  root.open("/");
+  myfileAnother.open(filename);
+  *size = (uint32_t)myfileAnother.fileSize();
+  //Serial.print("File size in myOpen: "); Serial.println(*size);
+
+  return (void *)&myfileAnother;
+}
+
+void myClose(void *p) {
+  ZIPFILE *pzf = (ZIPFILE *)p;
+  File *f = (File *)pzf->fHandle;
+  if (f) f->close();
+}
+
+int32_t myRead(void *p, uint8_t *buffer, int32_t length) {
+  ZIPFILE *pzf = (ZIPFILE *)p;
+  File *f = (File *)pzf->fHandle;
+  return f->read(buffer, length);
+}
+
+int32_t mySeek(void *p, int32_t position, int iType) {
+  ZIPFILE *pzf = (ZIPFILE *)p;
+  File *f = (File *)pzf->fHandle;
+  if (iType == SEEK_SET)
+    return f->seek(position);
+  else if (iType == SEEK_END) {
+    return f->seek(position + pzf->iSize); 
+  } else { // SEEK_CUR
+    long l = f->position();
+    return f->seek(l + position);
+  }
+}
+
+
+
+/******************************************************************************/
 
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
@@ -76,9 +134,7 @@ const char* topicInit      = "GsmClientTest/init";
 const char* topicLedStatus = "GsmClientTest/ledStatus";
 
 int ledStatus = LOW;
-
 uint32_t lastReconnectAttempt = 0;
-
 
 //for HTTP
 TinyGsm        modem(SerialAT);
@@ -89,27 +145,12 @@ HttpClient    http(client_1, server, port);
 TinyGsmClient client_2(modem, 2);
 PubSubClient  mqtt(client_2);
 
-
 // Set phone numbers, if you want to test SMS and Calls
 #define SMS_TARGET  "+36706347173"
 #define CALL_TARGET "+36706347173"
 
-
+//for MQTT (led toggle)
 #define LED_PIN BLUE_LED
-/******************************************************************************/
-
-SPIClass SPI_4(SD_CARD_MOSI, SD_CARD_MISO, SD_CARD_SCK); // MOSI, MISO. SCLK
-
-const uint8_t SD_CS_PIN = SD_CARD_CS;
-
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(4), &SPI_4)
-
-
-SdFat sd;
-File file;
-File root;
-
-
 /******************************************************************************/
 
 /* Get the rtc object */
@@ -209,8 +250,6 @@ void printPercent(uint32_t readLength, uint32_t contentLength) {
   }
 }
 
-
-
 void mqttCallback(char* topic, byte* payload, unsigned int len) {
   SerialMon.print("Message arrived [");
   SerialMon.print(topic);
@@ -246,13 +285,10 @@ boolean mqttConnect() {
   return mqtt.connected();
 }
 
-
-
 void setup()
 {
   Serial.begin(115200);
   Serial.println("Water minilab");
-
 
   servo1.attach(SERVO_1_PWM);
   servo2.attach(SERVO_2_PWM);
@@ -283,7 +319,6 @@ void setup()
   // you can use also
   rtc.setTime(hours, minutes, seconds);
   rtc.setDate(weekDay, day, month, year);
-
 
   pinMode(USER_BUTTON, INPUT);
   attachInterrupt(digitalPinToInterrupt(USER_BUTTON), button_ISR, FALLING);
@@ -319,7 +354,6 @@ void setup()
   delay(3000);
   dc_pump_2.stop();
  
-
   Serial.println("- testing relays");
 	relay1.turnOff(); //turns relay off
   relay2.turnOff(); //turns relay off
@@ -423,20 +457,92 @@ void setup()
   }
 
   // Create a file in Folder1 using a path.
-  if (!file.open("Folder1/file1.txt", O_WRONLY | O_CREAT))
+  if (!myfile.open("Folder1/file1.txt", O_WRONLY | O_CREAT))
   {
     Serial.println("Create Folder1/file1.txt failed");
   }
   Serial.println("Created Folder1/file1.txt");
-  file.println("Hello 1, 2, 3");
+  myfile.println("Hello 1, 2, 3");
   Serial.println("Hello 1, 2, 3 written to Folder1/file1.txt");
 
   Serial.print("Size of Folder1/file1.txt: ");
-  Serial.println(file.fileSize());
+  Serial.println(myfile.fileSize());
 
-  file.close();
+  myfile.close();
   Serial.println("Folder1/file1.txt closed");
   Serial.println("****************************************");
+
+
+  // Create a application.bin file to write RAM to SD card
+  if (!binFile.open("application.bin", O_WRONLY | O_CREAT))
+  {
+    Serial.println("Create application.bin failed");
+  }
+  else
+  {
+    Serial.println("application.bin created");
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  int rc;
+  char szComment[256], szName[256];
+  unz_file_info fi;
+
+  const char *name = "application.zip";
+  if (!myfile.open(name, O_RDONLY))
+  {
+    Serial.println("Opening application.zip failed");
+  }
+  Serial.println("Openened application.zip");
+  rc = rc = zip.openZIP(name, myOpen, myClose, myRead, mySeek);
+  if (rc == UNZ_OK) {
+    Serial.println("ZIP file found!");
+
+    // Display the global comment and all of the filenames within
+    rc = zip.getGlobalComment(szComment, sizeof(szComment));
+    Serial.print("Files in this archive: ");
+    zip.gotoFirstFile();
+    rc = UNZ_OK;
+    rc = zip.getFileInfo(&fi, szName, sizeof(szName), NULL, 0, szComment, sizeof(szComment));
+
+    if (rc == UNZ_OK) {
+      Serial.println(szName);
+      Serial.print("Compressed size: "); Serial.println(fi.compressed_size, DEC);
+      Serial.print("Uncompressed size: "); Serial.println(fi.uncompressed_size, DEC);
+      
+    }
+
+    zip.locateFile("application.bin");
+    zip.openCurrentFile();
+
+    int counter = 0;
+    int number_of_chunks = (fi.uncompressed_size / BUFF_SIZE);
+    int rc, i;
+    rc = 1;
+    i = 0;
+    while (rc > 0) {
+        if (counter == number_of_chunks) {
+          break;
+        }
+        rc = zip.readCurrentFile(l_Buff, BUFF_SIZE);
+        binFile.write(l_Buff, BUFF_SIZE);
+        counter++;
+        if (rc >= 0) {
+            i += rc;
+        } else {
+            Serial.println("Error reading from file");
+            break;
+        }
+    }
+    Serial.print("Total bytes read = ");
+    Serial.println(i);
+    
+    zip.closeCurrentFile();
+    zip.closeZIP();
+
+    binFile.close();
+    Serial.println("Now you can remove SD card.");
+  }
 
   //////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////////
@@ -503,7 +609,7 @@ void setup()
   mqtt.setCallback(mqttCallback);
 
   pinMode(LED_PIN, OUTPUT);
-  
+
   /*********************************************************************/
   // SMS
   String imei = modem.getIMEI();
