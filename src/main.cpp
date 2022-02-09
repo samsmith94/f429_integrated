@@ -25,6 +25,17 @@
 
 #include <ArduinoJson.h>
 
+#include <DebugLog.h>
+/******************************************************************************/
+SdFat fs;
+
+void shorten(String& s) {
+    for (size_t i = 0; i < s.length(); ++i) {
+        if (s[i] == ':')
+            s.setCharAt(i, '_');
+    }
+}
+
 /******************************************************************************/
 
 #define BUFF_SIZE 1024
@@ -305,6 +316,70 @@ void setup()
   Serial.begin(115200);
   Serial.println("Water minilab");
 
+  //esetleg http-n el is kéne majd küldeni a log-ot ha valami gond van...
+  if (fs.begin(SD_CONFIG)) {
+      PRINTLN("FileSystem initialization success");
+
+      String filename = "/" + String(__TIME__) + ".txt";   //ezt nyilván majd az RTC-ből kéne
+      shorten(filename);
+
+      // Set file system to save log manually
+      LOG_ATTACH_FS_MANUAL(fs, filename, FILE_WRITE);  // overwrite file
+      // LOG_ATTACH_FS_MANUAL(fs, filename, FILE_APPEND);  // append to file
+
+  } else {
+      ASSERTM(false, "FileSystem initialization failed!");
+  }
+
+  // PRINT_FILE and PRINTLN_FILE is not affected by file_level (always visible)
+  // PRINT_FILE and PRINTLN_FILE is not displayed to Serial
+  PRINT_FILE("DebugLog", "can print variable args: ");
+  PRINTLN_FILE(1, 2.2, "three", "=> like this");
+
+  // Apart from the log level to be displayed,
+  // you can set the log level to be saved to a file (Default is DebugLogLevel::LVL_ERROR)
+  LOG_FILE_SET_LEVEL(DebugLogLevel::LVL_ERROR);
+  //PRINTLN_FILE("current log level is", (int)LOG_FILE_GET_LEVEL());
+  LOG_INFO("current log level is", (int)LOG_FILE_GET_LEVEL());
+
+  // The default log_leval is DebugLogLevel::LVL_INFO
+  // 0: NONE, 1: ERROR, 2: WARN, 3: INFO, 4: DEBUG, 5: TRACE
+  // PRINTLN_FILE("current file level is", (int)LOG_FILE_GET_LEVEL());
+
+  // LOG_XXXX outpus both Serial and File based on log_level and file_level
+  // The default log_leval is DebugLogLevel::LVL_INFO
+  // The default file_leval is DebugLogLevel::LVL_ERROR
+  LOG_ERROR("this is error log");  // printed to both Serial and File
+  LOG_WARN("this is warn log");    // won't be saved but printed
+  LOG_INFO("this is info log");    // won't be saved but printed
+  LOG_DEBUG("this is debug log");  // won't be printed
+  LOG_TRACE("this is trace log");  // won't be printed
+
+  // Log array
+  float arr[3] {1.1, 2.2, 3.3};
+  PRINTLN_FILE("Array can be also printed like this", LOG_AS_ARR(arr, 3));
+
+  LOG_FILE_FLUSH();  // save to SD card and continue logging
+  LOG_FILE_CLOSE();  // flush() and finish logging (ASSERT won't be saved to SD)
+
+  delay(1000);
+
+  // If assertion failed, suspend program after prints message and close files
+  // assertions are automatically saved if DebugLog is not closed
+  // if DebugLog is closed, assertions won't be saved to SD
+  int x = 1;
+  // ASSERT(x != 1);
+  // You can also use assert with messages by ASSERTM macro
+  ASSERTM(x != 1, "This always fails");
+
+  ///////////////
+  if (LOG_FILE_IS_OPEN()) {
+      LOG_FILE_CLOSE();
+  }
+  PRINTLN("if DEBUGLOG_DISABLE_LOG is commented out (assert is enabled), does not come here");
+
+  /****************************************************************************/
+
   servo1.attach(SERVO_1_PWM);
   servo2.attach(SERVO_2_PWM);
 
@@ -316,7 +391,6 @@ void setup()
   /****************************************************************************/
   DynamicJsonDocument doc(64);    //sokat számít a méret!! 1024-el timeout volt!!!
 
-  
   /****************************************************************************/
 
   pinMode(USER_BUTTON, INPUT);
