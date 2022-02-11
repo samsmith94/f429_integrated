@@ -136,24 +136,35 @@ HardwareSerial Serial1(PG9, PG14);
 // This may be needed for a fast processor at a slow baud rate.
 // #define TINY_GSM_YIELD() { delay(2); }
 
+
+//for MQTT (led toggle)
+#define LED_PIN BLUE_LED
+
+
 // set GSM PIN, if any
-#define GSM_PIN "9526"
+#define GSM_PIN         "9526"
+
+// Set phone numbers, if you want to test SMS and Calls
+#define SMS_TARGET      "+36706347173"
+#define CALL_TARGET     "+36706347173"
 
 // Your GPRS credentials, if any
-const char apn[]      = "internet.vodafone.net";
-const char gprsUser[] = "";
-const char gprsPass[] = "";
+#define APN             "internet.vodafone.net"
+#define GPRS_USER       ""
+#define GPRS_PASSWORD   ""
 
 // Server details
-const char server[]   = "water-minilab.herokuapp.com";  //nem lehet előtte http://
-const int  port       = 80;
+//nem lehet előtte http://
+#define HTTP_SERVER     "water-minilab.herokuapp.com"
+#define HTTP_PORT       80
 
-const char zip_resource[]    = "/download";
-uint32_t   knownCRC32    = 0xdc6dd831;
-uint32_t   knownFileSize = 50338  ;  // In case server does not send it
+#define ZIP_RESOURCE    "/download"
+#define KNOWN_CRC32     0xdc6dd831
+#define KNOWN_FILESIZE  50338
 
 // MQTT details
-const char* broker = "broker.hivemq.com";
+#define MQTT_BROKER     "broker.hivemq.com"
+
 const char* topicLed       = "GsmClientTest/led";
 const char* topicInit      = "GsmClientTest/init";
 const char* topicLedStatus = "GsmClientTest/ledStatus";
@@ -161,21 +172,16 @@ const char* topicLedStatus = "GsmClientTest/ledStatus";
 int ledStatus = LOW;
 uint32_t lastReconnectAttempt = 0;
 
-//for HTTP
-TinyGsm        modem(SerialAT);
-TinyGsmClient client_1(modem, 1);
-HttpClient    http(client_1, server, port);
+// for HTTP
+TinyGsm       modem(SerialAT);
+TinyGsmClient http_client(modem, 1);
+HttpClient    http(http_client, HTTP_SERVER, HTTP_PORT);
 
-//for MQTT
-TinyGsmClient client_2(modem, 2);
-PubSubClient  mqtt(client_2);
+// for MQTT
+TinyGsmClient mqtt_client(modem, 2);
+PubSubClient  mqtt(mqtt_client);
 
-// Set phone numbers, if you want to test SMS and Calls
-#define SMS_TARGET  "+36706347173"
-#define CALL_TARGET "+36706347173"
 
-//for MQTT (led toggle)
-#define LED_PIN BLUE_LED
 /******************************************************************************/
 
 /* Get the rtc object */
@@ -293,7 +299,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
 
 boolean mqttConnect() {
   SerialMon.print("Connecting to ");
-  SerialMon.print(broker);
+  SerialMon.print(MQTT_BROKER);
 
   // Connect to MQTT Broker
   boolean status = mqtt.connect("GsmClientTest");
@@ -594,8 +600,8 @@ void setup()
 
   // GPRS connection parameters are usually set after network registration
   SerialMon.print(F("Connecting to "));
-  SerialMon.print(apn);
-  if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
+  SerialMon.print(APN);
+  if (!modem.gprsConnect(APN, GPRS_USER, GPRS_PASSWORD)) {
     SerialMon.println(" fail");
     delay(10000);
     return;
@@ -607,7 +613,7 @@ void setup()
   /*********************************************************************/
   // MQTT
   // MQTT Broker setup
-  mqtt.setServer(broker, 1883);
+  mqtt.setServer(MQTT_BROKER, 1883);
   mqtt.setCallback(mqttCallback);
 
   pinMode(LED_PIN, OUTPUT);
@@ -667,8 +673,8 @@ void setup()
 
   /////////////////////
   SerialMon.print(F("Connecting to "));
-  SerialMon.print(server);
-  if (!client_1.connect(server, port)) {
+  SerialMon.print(HTTP_SERVER);
+  if (!http_client.connect(HTTP_SERVER, HTTP_PORT)) {
     SerialMon.println(" fail");
     delay(10000);
     return;
@@ -676,9 +682,9 @@ void setup()
   SerialMon.println(" success");
 
   // Make a HTTP GET request:
-  client_1.print(String("GET ") + zip_resource + " HTTP/1.0\r\n");
-  client_1.print(String("Host: ") + server + "\r\n");
-  client_1.print("Connection: close\r\n\r\n");
+  http_client.print(String("GET ") + ZIP_RESOURCE + " HTTP/1.0\r\n");
+  http_client.print(String("Host: ") + HTTP_SERVER + "\r\n");
+  http_client.print("Connection: close\r\n\r\n");
 
   // Let's see what the entire elapsed time is, from after we send the request.
   uint32_t timeElapsed = millis();
@@ -699,10 +705,10 @@ void setup()
   while (!finishedHeader) {
     int nlPos;
 
-    if (client_1.available()) {
+    if (http_client.available()) {
       clientReadStartTime = millis();
-      while (client_1.available()) {
-        char c = client_1.read();
+      while (http_client.available()) {
+        char c = http_client.read();
         headerBuffer += c;
 
         // Uncomment the lines below to see the data coming into the buffer
@@ -759,15 +765,15 @@ void setup()
   uint32_t readLength = 0;
   CRC32    crc;
 
-  if (finishedHeader && contentLength == knownFileSize) {
+  if (finishedHeader && contentLength == KNOWN_FILESIZE) {
     SerialMon.println(F("Reading response data"));
     clientReadStartTime = millis();
 
     printPercent(readLength, contentLength);
-    while (readLength < contentLength && client_1.connected() &&
+    while (readLength < contentLength && http_client.connected() &&
            millis() - clientReadStartTime < clientReadTimeout) {
-      while (client_1.available()) {
-        uint8_t c = client_1.read();
+      while (http_client.available()) {
+        uint8_t c = http_client.read();
         downloadedZIPFile.write(c);
         // SerialMon.print(reinterpret_cast<char>c);  // Uncomment this to show
         // data
@@ -787,7 +793,7 @@ void setup()
 
   // Shutdown
 
-  //client_1.stop();
+  //http_client.stop();
   //SerialMon.println(F("Server disconnected"));
 
   //modem.gprsDisconnect();
@@ -803,7 +809,7 @@ void setup()
   SerialMon.print("Calc. CRC32:    0x");
   SerialMon.println(crc.finalize(), HEX);
   SerialMon.print("Known CRC32:    0x");
-  SerialMon.println(knownCRC32, HEX);
+  SerialMon.println(KNOWN_CRC32, HEX);
   SerialMon.print("Duration:       ");
   SerialMon.print(duration);
   SerialMon.println("s");
@@ -1046,8 +1052,8 @@ void loop()
   //   if (!modem.isGprsConnected()) {
   //     SerialMon.println("GPRS disconnected!");
   //     SerialMon.print(F("Connecting to "));
-  //     SerialMon.print(apn);
-  //     if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
+  //     SerialMon.print(APN);
+  //     if (!modem.gprsConnect(APN, GPRS_USER, GPRS_PASSWORD)) {
   //       SerialMon.println(" fail");
   //       delay(10000);
   //       return;
