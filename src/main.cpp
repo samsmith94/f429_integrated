@@ -142,32 +142,35 @@ HardwareSerial Serial1(PG9, PG14);
 
 
 // set GSM PIN, if any
-#define GSM_PIN         "9526"
+#define GSM_PIN               "9526"
 
 // Set phone numbers, if you want to test SMS and Calls
-#define SMS_TARGET      "+36706347173"
-#define CALL_TARGET     "+36706347173"
+#define SMS_TARGET            "+36706347173"
+#define CALL_TARGET           "+36706347173"
 
 // Your GPRS credentials, if any
-#define APN             "internet.vodafone.net"
-#define GPRS_USER       ""
-#define GPRS_PASSWORD   ""
+#define APN                   "internet.vodafone.net"
+#define GPRS_USER             ""
+#define GPRS_PASSWORD         ""
 
 // Server details
 //nem lehet előtte http://
-#define HTTP_SERVER     "water-minilab.herokuapp.com"
-#define HTTP_PORT       80
+#define HTTP_SERVER           "water-minilab.herokuapp.com"
+#define HTTP_PORT             80
 
-#define ZIP_RESOURCE    "/download"
-#define KNOWN_CRC32     0xdc6dd831
-#define KNOWN_FILESIZE  50338
+#define ZIP_RESOURCE_ENDPOINT "/download"
+#define ZIP_RESOURCE_CRC32    0xDC6DD831
+#define ZIP_RESOURCE_FILESIZE 50338
 
+#define BINARY_SIZE_ENDPOINT  "/binarysize"
+
+#define POST_DATA_ENDPOINT    "/upload"
 // MQTT details
-#define MQTT_BROKER     "broker.hivemq.com"
+#define MQTT_BROKER           "broker.hivemq.com"
 
-const char* topicLed       = "GsmClientTest/led";
-const char* topicInit      = "GsmClientTest/init";
-const char* topicLedStatus = "GsmClientTest/ledStatus";
+#define MQTT_TOPIC_LED        "GsmClientTest/led"
+#define MQTT_TOPIC_INIT       "GsmClientTest/init"
+#define MQTT_TOPIC_LEDSTATUS  "GsmClientTest/ledStatus"
 
 int ledStatus = LOW;
 uint32_t lastReconnectAttempt = 0;
@@ -180,7 +183,6 @@ HttpClient    http(http_client, HTTP_SERVER, HTTP_PORT);
 // for MQTT
 TinyGsmClient mqtt_client(modem, 2);
 PubSubClient  mqtt(mqtt_client);
-
 
 /******************************************************************************/
 
@@ -290,10 +292,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
   SerialMon.println();
 
   // Only proceed if incoming message's topic matches
-  if (String(topic) == topicLed) {
+  if (String(topic) == MQTT_TOPIC_LED) {
     ledStatus = !ledStatus;
     digitalWrite(LED_PIN, ledStatus);
-    mqtt.publish(topicLedStatus, ledStatus ? "1" : "0");
+    mqtt.publish(MQTT_TOPIC_LEDSTATUS, ledStatus ? "1" : "0");
   }
 }
 
@@ -312,8 +314,8 @@ boolean mqttConnect() {
     return false;
   }
   SerialMon.println(" success");
-  mqtt.publish(topicInit, "GsmClientTest started");
-  mqtt.subscribe(topicLed);
+  mqtt.publish(MQTT_TOPIC_INIT, "GsmClientTest started");
+  mqtt.subscribe(MQTT_TOPIC_LED);
   return mqtt.connected();
 }
 
@@ -682,7 +684,7 @@ void setup()
   SerialMon.println(" success");
 
   // Make a HTTP GET request:
-  http_client.print(String("GET ") + ZIP_RESOURCE + " HTTP/1.0\r\n");
+  http_client.print(String("GET ") + ZIP_RESOURCE_ENDPOINT + " HTTP/1.0\r\n");
   http_client.print(String("Host: ") + HTTP_SERVER + "\r\n");
   http_client.print("Connection: close\r\n\r\n");
 
@@ -765,7 +767,7 @@ void setup()
   uint32_t readLength = 0;
   CRC32    crc;
 
-  if (finishedHeader && contentLength == KNOWN_FILESIZE) {
+  if (finishedHeader && contentLength == ZIP_RESOURCE_FILESIZE) {
     SerialMon.println(F("Reading response data"));
     clientReadStartTime = millis();
 
@@ -809,7 +811,7 @@ void setup()
   SerialMon.print("Calc. CRC32:    0x");
   SerialMon.println(crc.finalize(), HEX);
   SerialMon.print("Known CRC32:    0x");
-  SerialMon.println(KNOWN_CRC32, HEX);
+  SerialMon.println(ZIP_RESOURCE_CRC32, HEX);
   SerialMon.print("Duration:       ");
   SerialMon.print(duration);
   SerialMon.println("s");
@@ -820,7 +822,7 @@ void setup()
   // HTTP GET request
 
   SerialMon.print(F("Performing HTTP GET request... "));
-  int err = http.get("/binarysize");
+  int err = http.get(BINARY_SIZE_ENDPOINT);
   if (err != 0) {
     SerialMon.println(F("failed to connect"));
     delay(10000);
@@ -873,7 +875,7 @@ void setup()
 
   http.connectionKeepAlive();
   http.beginRequest();
-  int codePost = http.post("/upload");
+  int codePost = http.post(POST_DATA_ENDPOINT);
 
   http.sendHeader(F("Content-Type"), F("application/json"));
   //http.sendHeader(F("Content-Length"), 13);
