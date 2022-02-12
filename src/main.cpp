@@ -1,8 +1,6 @@
 #include <Arduino.h>
 #include <pins.h>
 
-#include <HexDump.h>
-
 #include <Relay.h>
 #include <MOSFET.h>
 
@@ -11,6 +9,7 @@
 #include <STM32RTC.h>
 #include <AccelStepper.h>
 
+#include <HexDump.h>
 #include <unzipLIB.h>
 #include "SdFat.h"
 #include "sdios.h"
@@ -24,9 +23,11 @@
 #include <PubSubClient.h>
 
 #include <ArduinoJson.h>
-
 #include <DebugLog.h>
-/******************************************************************************/
+
+/******************************************************************************
+ ** Global variables and functions for DebugLog *******************************
+ ******************************************************************************/
 SdFat fs;
 
 void shorten(String& s) {
@@ -36,8 +37,9 @@ void shorten(String& s) {
     }
 }
 
-/******************************************************************************/
-
+/******************************************************************************
+ ** Defies, global variables for unzipLIB *************************************
+ ******************************************************************************/
 #define BUFF_SIZE 1024
 static uint8_t l_Buff[BUFF_SIZE];
 
@@ -52,15 +54,12 @@ File root;
 static File myfile;
 static File myfileAnother;
 static File binFile;
-
 static File downloadedZIPFile;
 
 void * myOpen(const char *filename, int32_t *size) {
   root.open("/");
   myfileAnother.open(filename);
   *size = (uint32_t)myfileAnother.fileSize();
-  //Serial.print("File size in myOpen: "); Serial.println(*size);
-
   return (void *)&myfileAnother;
 }
 
@@ -89,24 +88,9 @@ int32_t mySeek(void *p, int32_t position, int iType) {
   }
 }
 
-/******************************************************************************/
-const int dayofweek(int year, int month, int day) {
-  /* using C99 compound literals in a single line: notice the splicing */
-  return ((const int [])                                         \
-          {1, 2, 3, 4, 5, 6, 0})[           \
-      (                                                            \
-          day                                                      \
-        + ((153 * (month + 12 * ((14 - month) / 12) - 3) + 2) / 5) \
-        + (365 * (year + 4800 - ((14 - month) / 12)))              \
-        + ((year + 4800 - ((14 - month) / 12)) / 4)                \
-        - ((year + 4800 - ((14 - month) / 12)) / 100)              \
-        + ((year + 4800 - ((14 - month) / 12)) / 400)              \
-        - 32045                                                    \
-      ) % 7];
-}
-
-/******************************************************************************/
-
+/******************************************************************************
+ ** Defies, global variables for TinyGSM **************************************
+ ******************************************************************************/
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
 
@@ -140,7 +124,6 @@ HardwareSerial Serial1(PG9, PG14);
 //for MQTT (led toggle)
 #define LED_PIN BLUE_LED
 
-
 // set GSM PIN, if any
 #define GSM_PIN               "9526"
 
@@ -153,8 +136,8 @@ HardwareSerial Serial1(PG9, PG14);
 #define GPRS_USER             ""
 #define GPRS_PASSWORD         ""
 
-// Server details
-//nem lehet előtte http://
+// HTTP server details
+// Never prepend http://
 #define HTTP_SERVER           "water-minilab.herokuapp.com"
 #define HTTP_PORT             80
 
@@ -165,6 +148,7 @@ HardwareSerial Serial1(PG9, PG14);
 #define BINARY_SIZE_ENDPOINT  "/binarysize"
 
 #define POST_DATA_ENDPOINT    "/upload"
+
 // MQTT details
 #define MQTT_BROKER           "broker.hivemq.com"
 
@@ -184,94 +168,6 @@ HttpClient    http(http_client, HTTP_SERVER, HTTP_PORT);
 TinyGsmClient mqtt_client(modem, 2);
 PubSubClient  mqtt(mqtt_client);
 
-/******************************************************************************/
-
-/* Get the rtc object */
-STM32RTC &rtc = STM32RTC::getInstance();
-
-// /* Change these values to set the current initial time */
-// const byte seconds = 0;
-// const byte minutes = 0;
-// const byte hours = 16;
-
-// /* Change these values to set the current initial date */
-// /* Monday 15th June 2015 */
-// const byte weekDay = 1;
-// const byte day = 15;
-// const byte month = 6;
-// const byte year = 15;
-
-/******************************************************************************/
-
-Servo servo1;
-Servo servo2;
-
-
-Relay relay1(RELAY_1, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
-Relay relay2(RELAY_2, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
-
-
-Relay mosfet1(MOSFET_1, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
-Relay mosfet2(MOSFET_2, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
-
-
-// Create one motor instance
-L298N dc_pump_1(DC_PUMP_1_PWM, DC_PUMP_1_EN_1, DC_PUMP_1_EN_2);
-L298N dc_pump_2(DC_PUMP_2_PWM, DC_PUMP_2_EN_1, DC_PUMP_2_EN_2);
-//L298N dc_pump_3(DC_PUMP_3_PWM, DC_PUMP_3_EN_1, DC_PUMP_3_EN_2);
-L298N dc_pump_4(DC_PUMP_4_PWM, DC_PUMP_4_EN_1, DC_PUMP_4_EN_2);
-
-
-AccelStepper stepper1(AccelStepper::DRIVER, STEPPER_1_STEP, STEPPER_1_DIR);
-AccelStepper stepper3(AccelStepper::DRIVER, STEPPER_3_STEP, STEPPER_3_DIR);
-
-
-/******************************************************************************/
-void button_ISR()
-{
-  Serial.println("Reset by USER_BUTTON");
-  HAL_NVIC_SystemReset();
-}
-
-void sw1_ISR()
-{
-  Serial.println("SW1 interrupt");
-}
-
-void sw2_ISR()
-{
-  Serial.println("SW2 interrupt");
-}
-
-void sw3_ISR()
-{
-  Serial.println("SW3 interrupt");
-}
-
-void sw4_ISR()
-{
-  Serial.println("SW4 interrupt");
-}
-
-void sw5_ISR()
-{
-  Serial.println("SW5 interrupt");
-}
-
-void sw6_ISR()
-{
-  Serial.println("SW6 interrupt");
-}
-
-void sw7_ISR()
-{
-  Serial.println("SW7 interrupt");
-}
-
-void sw8_ISR()
-{
-  Serial.println("SW8 interrupt");
-}
 
 void printPercent(uint32_t readLength, uint32_t contentLength) {
   // If we know the total length
@@ -319,16 +215,126 @@ boolean mqttConnect() {
   return mqtt.connected();
 }
 
+/******************************************************************************
+ ** Defies, global variables for STM32RTC *************************************
+ ******************************************************************************/
+/* Get the rtc object */
+STM32RTC &rtc = STM32RTC::getInstance();
+
+// /* Change these values to set the current initial time */
+// const byte seconds = 0;
+// const byte minutes = 0;
+// const byte hours = 16;
+
+// /* Change these values to set the current initial date */
+// /* Monday 15th June 2015 */
+// const byte weekDay = 1;
+// const byte day = 15;
+// const byte month = 6;
+// const byte year = 15;
+
+const int dayofweek(int year, int month, int day) {
+  /* using C99 compound literals in a single line: notice the splicing */
+  return ((const int [])                                         \
+          {1, 2, 3, 4, 5, 6, 0})[           \
+      (                                                            \
+          day                                                      \
+        + ((153 * (month + 12 * ((14 - month) / 12) - 3) + 2) / 5) \
+        + (365 * (year + 4800 - ((14 - month) / 12)))              \
+        + ((year + 4800 - ((14 - month) / 12)) / 4)                \
+        - ((year + 4800 - ((14 - month) / 12)) / 100)              \
+        + ((year + 4800 - ((14 - month) / 12)) / 400)              \
+        - 32045                                                    \
+      ) % 7];
+}
+
+/******************************************************************************
+ ** Defies, global variables for Servo, Relay, MOSFET, L298N and AccelStepper *
+ ******************************************************************************/
+Servo servo1;
+Servo servo2;
+
+Relay relay1(RELAY_1, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
+Relay relay2(RELAY_2, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
+
+MOSFET mosfet1(MOSFET_1, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
+MOSFET mosfet2(MOSFET_2, false); // constructor receives (pin, isNormallyOpen) true = Normally Open, false = Normally Closed
+
+// Create one motor instance
+L298N dc_pump_1(DC_PUMP_1_PWM, DC_PUMP_1_EN_1, DC_PUMP_1_EN_2);
+L298N dc_pump_2(DC_PUMP_2_PWM, DC_PUMP_2_EN_1, DC_PUMP_2_EN_2);
+//L298N dc_pump_3(DC_PUMP_3_PWM, DC_PUMP_3_EN_1, DC_PUMP_3_EN_2);
+L298N dc_pump_4(DC_PUMP_4_PWM, DC_PUMP_4_EN_1, DC_PUMP_4_EN_2);
+
+AccelStepper stepper1(AccelStepper::DRIVER, STEPPER_1_STEP, STEPPER_1_DIR);
+AccelStepper stepper3(AccelStepper::DRIVER, STEPPER_3_STEP, STEPPER_3_DIR);
+
+/******************************************************************************
+ ** Defies, global variables limit swithces ***********************************
+ ******************************************************************************/
+void user_button_ISR()
+{
+  Serial.println("Reset by USER_BUTTON");
+  HAL_NVIC_SystemReset();
+}
+
+void sw1_ISR()
+{
+  Serial.println("SW1 interrupt");
+}
+
+void sw2_ISR()
+{
+  Serial.println("SW2 interrupt");
+}
+
+void sw3_ISR()
+{
+  Serial.println("SW3 interrupt");
+}
+
+void sw4_ISR()
+{
+  Serial.println("SW4 interrupt");
+}
+
+void sw5_ISR()
+{
+  Serial.println("SW5 interrupt");
+}
+
+void sw6_ISR()
+{
+  Serial.println("SW6 interrupt");
+}
+
+void sw7_ISR()
+{
+  Serial.println("SW7 interrupt");
+}
+
+void sw8_ISR()
+{
+  Serial.println("SW8 interrupt");
+}
+
+/******************************************************************************
+ ** setup() *******************************************************************
+ ******************************************************************************/
 void setup()
 {
   Serial.begin(115200);
   Serial.println("Water minilab");
 
-  //esetleg http-n el is kéne majd küldeni a log-ot ha valami gond van...
+  //////////////////////////////////////////////////////////////////////////////
+  // TESTING FILE LOGGER ///////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////
+  Serial.println("- testing file logger");
+  // Esetleg HTTP-n el is kéne majd küldeni a log-ot ha valami gond van.
   if (fs.begin(SD_CONFIG)) {
       PRINTLN("FileSystem initialization success");
 
-      String filename = "/" + String(__TIME__) + ".txt";   //ezt nyilván majd az RTC-ből kéne
+      String filename = "/" + String(__TIME__) + ".txt";   // Ezt nyilván majd az RTC-ből kéne.
       shorten(filename);
 
       // Set file system to save log manually
@@ -372,6 +378,7 @@ void setup()
 
   delay(1000);
 
+#if 0
   // If assertion failed, suspend program after prints message and close files
   // assertions are automatically saved if DebugLog is not closed
   // if DebugLog is closed, assertions won't be saved to SD
@@ -380,14 +387,15 @@ void setup()
   // You can also use assert with messages by ASSERTM macro
   ASSERTM(x != 1, "This always fails");
 
-  ///////////////
   if (LOG_FILE_IS_OPEN()) {
       LOG_FILE_CLOSE();
   }
   PRINTLN("if DEBUGLOG_DISABLE_LOG is commented out (assert is enabled), does not come here");
+#endif
 
-  /****************************************************************************/
-
+  //////////////////////////////////////////////////////////////////////////////
+  // TESTING SERVOS, RELAYS, MOSFETS, DC PUMPS, STEPPER MOTORS /////////////////
+  //////////////////////////////////////////////////////////////////////////////
   servo1.attach(SERVO_1_PWM);
   servo2.attach(SERVO_2_PWM);
 
@@ -395,16 +403,77 @@ void setup()
   relay2.begin();
   mosfet1.begin();
   mosfet2.begin();
+  
+  Serial.println("- testing DC pumps");
+  dc_pump_2.setSpeed(255);
+  dc_pump_2.forward();
+  delay(3000);
 
-  /****************************************************************************/
-  DynamicJsonDocument doc(64);    //sokat számít a méret!! 1024-el timeout volt!!!
+  dc_pump_2.stop();
+  delay(3000);
 
-  /****************************************************************************/
+  dc_pump_2.setSpeed(127);
+  dc_pump_2.backward();
+  delay(3000);
+  dc_pump_2.stop();
+ 
+  Serial.println("- testing relays");
+	relay1.turnOff();
+  relay2.turnOff();
+  delay(1000);
+	relay1.turnOn();
+  relay2.turnOn();
+  delay(1000);
+  relay1.turnOff();
+  relay2.turnOff();
+  delay(1000);
+	relay1.turnOn();
+  relay2.turnOn();
 
+  Serial.println("- testing MOSFETS");
+	mosfet1.turnOff();
+  mosfet2.turnOff();
+  delay(1500);
+	mosfet1.turnOn();
+  mosfet2.turnOn();
+  delay(1500);
+  mosfet1.turnOff();
+  mosfet2.turnOff();
+
+  Serial.println("- testing servos");
+  for (int i = 0; i < 180; i++) {
+    servo1.write(i);
+    servo2.write(i);
+    delay(3);
+  }
+  for (int i = 180; i > 0; i--) {
+    servo1.write(i);
+    servo2.write(i);
+    delay(3);
+  }
+
+#if 0
+  Serial.println("- testing steppers");
+  stepper1.setMaxSpeed(3000.0);
+  stepper1.setAcceleration(3000.0);
+  stepper1.moveTo(100);
+  while(1) {
+    // Change direction at the limits
+    if (stepper1.distanceToGo() == 0)
+    {
+      stepper1.moveTo(-stepper1.currentPosition());
+    }
+    stepper1.run();
+  }
+#endif
+
+  //////////////////////////////////////////////////////////////////////////////
+  // TESTING LIMIT SWITCH INTERRUPTS ///////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////
   pinMode(USER_BUTTON, INPUT);
-  attachInterrupt(digitalPinToInterrupt(USER_BUTTON), button_ISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(USER_BUTTON), user_button_ISR, FALLING);
 
-  //sajnos nem igazán szereti ha közben a http megy :D
+  // Sajnos nem igazán szereti ha közben a HTTP megy. Le kall majd tiltani a megszakításokat: detachInterrupt(digitalPinToInterrupt(SW1))
   // pinMode(SW1, INPUT);
   // attachInterrupt(digitalPinToInterrupt(SW1), sw1_ISR, FALLING);
   // pinMode(SW2, INPUT);
@@ -422,60 +491,9 @@ void setup()
   // pinMode(SW8, INPUT);
   // attachInterrupt(digitalPinToInterrupt(SW8), sw8_ISR, FALLING);
 
-  Serial.println("- testing DC pumps");
-  dc_pump_2.setSpeed(255);
-  dc_pump_2.forward();
-  delay(3000);
-
-  dc_pump_2.stop();
-  delay(3000);
-
-  dc_pump_2.setSpeed(127);
-  dc_pump_2.backward();
-  delay(3000);
-  dc_pump_2.stop();
- 
-  Serial.println("- testing relays");
-	relay1.turnOff(); //turns relay off
-  relay2.turnOff(); //turns relay off
-  delay(1000);
-	relay1.turnOn();  //turns relay on
-  relay2.turnOn();  //turns relay on
-  delay(1000);
-  relay1.turnOff(); //turns relay off
-  relay2.turnOff(); //turns relay off
-  delay(1000);
-	relay1.turnOn();  //turns relay on
-  relay2.turnOn();  //turns relay on
-
-  Serial.println("- testing MOSFETS");
-	mosfet1.turnOff(); //turns relay off
-  mosfet2.turnOff(); //turns relay off
-  delay(1500);
-	mosfet1.turnOn();  //turns relay on
-  mosfet2.turnOn();  //turns relay on
-  delay(1500);
-  mosfet1.turnOff(); //turns relay off
-  mosfet2.turnOff(); //turns relay off
-
-  Serial.println("- testing servos");
-  for (int i = 0; i < 180; i++) {
-    servo1.write(i);
-    servo2.write(i);
-    delay(3);
-  }
-  for (int i = 180; i > 0; i--) {
-    servo1.write(i);
-    servo2.write(i);
-    delay(3);
-  }
-
-  // Serial.println("- testing steppers");
-  // stepper1.setMaxSpeed(3000.0);
-  // stepper1.setAcceleration(3000.0);
-  // stepper1.moveTo(100);
-  
-  
+  //////////////////////////////////////////////////////////////////////////////
+  // TESTING SD CARD DIRECTORY FUNCTIONS ///////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////
   Serial.println("- testing SD card");
   // Initialize the SD card.
   if (!sd.begin(SD_CONFIG))
@@ -524,8 +542,7 @@ void setup()
     }
   }
 
-  //////////////////////////////////////////////////////////////////////////////
-
+  
   // Create a new folder.
   if (!sd.mkdir("Folder1"))
   {
@@ -555,21 +572,18 @@ void setup()
 
 
   //////////////////////////////////////////////////////////////////////////////
+  // TESTING ALL GSM FUNCTIONS (HTTP GET/POST & MQTT, SMS, NETWORK TIME) ///////
   //////////////////////////////////////////////////////////////////////////////
   Serial.println("- testing GSM HTTP GET and POST");
 
+  DynamicJsonDocument doc(64);    // Sokat számít a méret! 1024-el timeout volt!
   
-  // !!!!!!!!!!!
-  // Set your reset, enable, power pins here
-  // !!!!!!!!!!!
   pinMode(MCU_GSM_PWRKEY, OUTPUT);
-
   digitalWrite(MCU_GSM_PWRKEY, HIGH);
   delay(1000); //Need delay
   digitalWrite(MCU_GSM_PWRKEY, LOW);
 
   SerialMon.println("Wait...");
-
   // Set GSM module baud rate
   TinyGsmAutoBaud(SerialAT, GSM_AUTOBAUD_MIN, GSM_AUTOBAUD_MAX);
   // SerialAT.begin(9600);
@@ -588,7 +602,6 @@ void setup()
   // Unlock your SIM card with a PIN if needed
   if (GSM_PIN && modem.getSimStatus() != 3) { modem.simUnlock(GSM_PIN); }
 
-  //////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////////
   SerialMon.print("Waiting for network...");
   if (!modem.waitForNetwork()) {
@@ -612,16 +625,14 @@ void setup()
 
   if (modem.isGprsConnected()) { SerialMon.println("GPRS connected"); }
 
-  /*********************************************************************/
-  // MQTT
+  // MQTT //////////////////////////////////////////////////////////////////////
   // MQTT Broker setup
   mqtt.setServer(MQTT_BROKER, 1883);
   mqtt.setCallback(mqttCallback);
 
   pinMode(LED_PIN, OUTPUT);
 
-  /*********************************************************************/
-  // SMS
+  // SMS ///////////////////////////////////////////////////////////////////////
   // String imei = modem.getIMEI();
   // bool res = modem.sendSMS(SMS_TARGET, String("Hello from ") + imei);
   // SerialMon.print("SMS: ");
@@ -632,8 +643,7 @@ void setup()
   //   SerialMon.println("fail");
   // }
 
-  /*********************************************************************/
-  // NIST time
+  // NIST TIME /////////////////////////////////////////////////////////////////
   modem.NTPServerSync("132.163.96.5", 20);
 
   int   year3    = 0;
@@ -660,9 +670,7 @@ void setup()
   String time = modem.getGSMDateTime(DATE_FULL);
   SerialMon.print("Current Network Time:"); SerialMon.println(time);
 
-  /*********************************************************************/
-  // HTTP download zip
-
+  // HTTP ZIP DOWNLOAD /////////////////////////////////////////////////////////
   // Create a application.bin file to write RAM to SD card
   if (!downloadedZIPFile.open("application.zip", O_WRONLY | O_CREAT))
   {
@@ -673,7 +681,7 @@ void setup()
     Serial.println("application.zip created");
   }
 
-  /////////////////////
+
   SerialMon.print(F("Connecting to "));
   SerialMon.print(HTTP_SERVER);
   if (!http_client.connect(HTTP_SERVER, HTTP_PORT)) {
@@ -794,7 +802,6 @@ void setup()
   SerialMon.println();
 
   // Shutdown
-
   //http_client.stop();
   //SerialMon.println(F("Server disconnected"));
 
@@ -816,11 +823,9 @@ void setup()
   SerialMon.print(duration);
   SerialMon.println("s");
 
-  ///////////////////
   downloadedZIPFile.close();
-  /*********************************************************************/
-  // HTTP GET request
-
+  
+  // HTTP GET REQUEST //////////////////////////////////////////////////////////
   SerialMon.print(F("Performing HTTP GET request... "));
   int err = http.get(BINARY_SIZE_ENDPOINT);
   if (err != 0) {
@@ -860,7 +865,7 @@ void setup()
   SerialMon.print(F("Body length is: "));
   SerialMon.println(body.length());
 
-  /*********************************************************************/
+  // HTTP POST REQUEST /////////////////////////////////////////////////////////
   delay(1000);
   doc["num"] = 15;
   String payload;
@@ -869,8 +874,6 @@ void setup()
   int payloadLength = payload.length();
   Serial.print("POST payload length: "); Serial.println(payloadLength);
 
-
-  // HTTP POST request
   SerialMon.print(F("\r\nPerforming HTTP POST request... "));
 
   http.connectionKeepAlive();
@@ -891,9 +894,8 @@ void setup()
   //int status = http.responseStatusCode();
   SerialMon.print(F("Response status code: "));
   SerialMon.println(status);
-  /*********************************************************************/
-
-  // Shutdown
+  
+  // SHUTDOWN AT THE END ///////////////////////////////////////////////////////
   // http.stop();
   // SerialMon.println(F("Server disconnected"));
 
@@ -903,8 +905,7 @@ void setup()
   // Do nothing forevermore
   //while (true) { delay(1000); }
 
-  /*********************************************************************/
-  
+  // UNZIP DOWNLOADED ZIP //////////////////////////////////////////////////////  
   // Create a application.bin file to write RAM to SD card
   if (!binFile.open("application.bin", O_WRONLY | O_CREAT))
   {
@@ -915,7 +916,7 @@ void setup()
     Serial.println("application.bin created");
   }
 
-  //////////////////////////////////////////////////////////////////////////////
+  
   int rc;
   char szComment[256], szName[256];
   unz_file_info fi;
@@ -976,12 +977,11 @@ void setup()
     Serial.println("Now you can remove SD card.");
   }
 
-  //////////////////////////////////////////////////////////////
+  // TEST RTC //////////////////////////////////////////////////////////////////
   Serial.println("- configure RTC");
   // Select RTC clock source: LSI_CLOCK, LSE_CLOCK or HSE_CLOCK.
   // By default the LSI is selected as source.
   rtc.setClockSource(STM32RTC::LSE_CLOCK);
-
   rtc.begin(); // initialize RTC 24H format
 
   // // Set the time
@@ -1002,79 +1002,58 @@ void setup()
   rtc.setTime(hour3, min3, sec3);
   rtc.setDate(weekDay, day3, month3, year3-2000);
   
-  /****************************************************************************/
+  for (int i = 0; i < 10; i++) {
+    // Print date...
+    Serial.printf("%02d/%02d/%02d ", rtc.getYear(), rtc.getMonth(), rtc.getDay());
+    // ...and time
+    Serial.printf("%02d:%02d:%02d\n", rtc.getHours(), rtc.getMinutes(), rtc.getSeconds());
+    delay(1000);
+  }
 }
 
+/******************************************************************************
+ ** loop() ********************************************************************
+ ******************************************************************************/
 void loop()
 {
-  // Print date...
-  Serial.printf("%02d/%02d/%02d ", rtc.getYear(), rtc.getMonth(), rtc.getDay());
-  // ...and time
-  Serial.printf("%02d:%02d:%02d\n", rtc.getHours(), rtc.getMinutes(), rtc.getSeconds());
-  delay(1000);
+  // MQTT LOOP
+  // Make sure we're still registered on the network
+  if (!modem.isNetworkConnected()) {
+    SerialMon.println("Network disconnected");
+    if (!modem.waitForNetwork(180000L, true)) {
+      SerialMon.println(" fail");
+      delay(10000);
+      return;
+    }
+    if (modem.isNetworkConnected()) {
+      SerialMon.println("Network re-connected");
+    }
 
-  // Serial.println("- testing DC pumps");
-  // dc_pump_2.setSpeed(255);
-  // dc_pump_2.forward();
-  // delay(3000);
+    // and make sure GPRS/EPS is still connected
+    if (!modem.isGprsConnected()) {
+      SerialMon.println("GPRS disconnected!");
+      SerialMon.print(F("Connecting to "));
+      SerialMon.print(APN);
+      if (!modem.gprsConnect(APN, GPRS_USER, GPRS_PASSWORD)) {
+        SerialMon.println(" fail");
+        delay(10000);
+        return;
+      }
+      if (modem.isGprsConnected()) { SerialMon.println("GPRS reconnected"); }
+    }
+  }
 
-  // dc_pump_2.stop();
-  // delay(3000);
+  if (!mqtt.connected()) {
+    SerialMon.println("=== MQTT NOT CONNECTED ===");
+    // Reconnect every 10 seconds
+    uint32_t t = millis();
+    if (t - lastReconnectAttempt > 10000L) {
+      lastReconnectAttempt = t;
+      if (mqttConnect()) { lastReconnectAttempt = 0; }
+    }
+    delay(100);
+    return;
+  }
 
-  // dc_pump_2.setSpeed(127);
-  // dc_pump_2.backward();
-  // delay(3000);
-  // dc_pump_2.stop();
-
-  // Change direction at the limits
-  // if (stepper1.distanceToGo() == 0)
-  // {
-  //   stepper1.moveTo(-stepper1.currentPosition());
-  // }
-  // stepper1.run();
-
-////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////
-
-  // // MQTT LOOP
-  // // Make sure we're still registered on the network
-  // if (!modem.isNetworkConnected()) {
-  //   SerialMon.println("Network disconnected");
-  //   if (!modem.waitForNetwork(180000L, true)) {
-  //     SerialMon.println(" fail");
-  //     delay(10000);
-  //     return;
-  //   }
-  //   if (modem.isNetworkConnected()) {
-  //     SerialMon.println("Network re-connected");
-  //   }
-
-  //   // and make sure GPRS/EPS is still connected
-  //   if (!modem.isGprsConnected()) {
-  //     SerialMon.println("GPRS disconnected!");
-  //     SerialMon.print(F("Connecting to "));
-  //     SerialMon.print(APN);
-  //     if (!modem.gprsConnect(APN, GPRS_USER, GPRS_PASSWORD)) {
-  //       SerialMon.println(" fail");
-  //       delay(10000);
-  //       return;
-  //     }
-  //     if (modem.isGprsConnected()) { SerialMon.println("GPRS reconnected"); }
-  //   }
-  // }
-
-  // if (!mqtt.connected()) {
-  //   SerialMon.println("=== MQTT NOT CONNECTED ===");
-  //   // Reconnect every 10 seconds
-  //   uint32_t t = millis();
-  //   if (t - lastReconnectAttempt > 10000L) {
-  //     lastReconnectAttempt = t;
-  //     if (mqttConnect()) { lastReconnectAttempt = 0; }
-  //   }
-  //   delay(100);
-  //   return;
-  // }
-
-  // mqtt.loop();
+  mqtt.loop();
 }
