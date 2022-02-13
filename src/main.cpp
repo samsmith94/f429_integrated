@@ -121,6 +121,12 @@ HardwareSerial Serial1(PG9, PG14);
 // #define TINY_GSM_YIELD() { delay(2); }
 
 
+//#define USE_HTTPS
+
+#ifdef USE_HTTPS
+#define TINY_GSM_SSL_CLIENT_AUTHENTICATION
+#endif
+
 //for MQTT (led toggle)
 #define LED_PIN BLUE_LED
 
@@ -139,7 +145,11 @@ HardwareSerial Serial1(PG9, PG14);
 // HTTP server details
 // Never prepend http://
 #define HTTP_SERVER           "water-minilab.herokuapp.com"
+#if defined(USE_HTTPS)
 #define HTTP_PORT             80
+#else
+#define HTTP_PORT             443
+#endif
 
 #define ZIP_RESOURCE_ENDPOINT "/download"
 #define ZIP_RESOURCE_CRC32    0xDC6DD831
@@ -161,7 +171,13 @@ uint32_t lastReconnectAttempt = 0;
 
 // for HTTP
 TinyGsm       modem(SerialAT);
+
+
+#if defined(USE_HTTPS)
+TinyGsmClientSecure http_client(modem);
+#else
 TinyGsmClient http_client(modem, 1);
+#endif
 HttpClient    http(http_client, HTTP_SERVER, HTTP_PORT);
 
 // for MQTT
@@ -378,7 +394,8 @@ void setup()
 
   delay(1000);
 
-#if 0
+#define ENABLE_TEST_ASSERTION 0
+#if ENABLE_TEST_ASSERTION
   // If assertion failed, suspend program after prints message and close files
   // assertions are automatically saved if DebugLog is not closed
   // if DebugLog is closed, assertions won't be saved to SD
@@ -473,23 +490,26 @@ void setup()
   pinMode(USER_BUTTON, INPUT);
   attachInterrupt(digitalPinToInterrupt(USER_BUTTON), user_button_ISR, FALLING);
 
+#define ENABLE_TEST_INTERRUPTS 0
+#if ENABLE_TEST_INTERRUPTS
   // Sajnos nem igazán szereti ha közben a HTTP megy. Le kall majd tiltani a megszakításokat: detachInterrupt(digitalPinToInterrupt(SW1))
-  // pinMode(SW1, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW1), sw1_ISR, FALLING);
-  // pinMode(SW2, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW2), sw2_ISR, FALLING);
-  // pinMode(SW3, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW3), sw3_ISR, FALLING);
-  // pinMode(SW4, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW4), sw4_ISR, FALLING);
-  // pinMode(SW5, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW5), sw5_ISR, FALLING);
-  // pinMode(SW6, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW6), sw6_ISR, FALLING);
-  // pinMode(SW7, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW7), sw7_ISR, FALLING);
-  // pinMode(SW8, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(SW8), sw8_ISR, FALLING);
+  pinMode(SW1, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW1), sw1_ISR, FALLING);
+  pinMode(SW2, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW2), sw2_ISR, FALLING);
+  pinMode(SW3, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW3), sw3_ISR, FALLING);
+  pinMode(SW4, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW4), sw4_ISR, FALLING);
+  pinMode(SW5, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW5), sw5_ISR, FALLING);
+  pinMode(SW6, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW6), sw6_ISR, FALLING);
+  pinMode(SW7, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW7), sw7_ISR, FALLING);
+  pinMode(SW8, INPUT);
+  attachInterrupt(digitalPinToInterrupt(SW8), sw8_ISR, FALLING);
+#endif
 
   //////////////////////////////////////////////////////////////////////////////
   // TESTING SD CARD DIRECTORY FUNCTIONS ///////////////////////////////////////
@@ -570,7 +590,6 @@ void setup()
   Serial.println("Folder1/file1.txt closed");
   Serial.println("****************************************");
 
-
   //////////////////////////////////////////////////////////////////////////////
   // TESTING ALL GSM FUNCTIONS (HTTP GET/POST & MQTT, SMS, NETWORK TIME) ///////
   //////////////////////////////////////////////////////////////////////////////
@@ -602,7 +621,7 @@ void setup()
   // Unlock your SIM card with a PIN if needed
   if (GSM_PIN && modem.getSimStatus() != 3) { modem.simUnlock(GSM_PIN); }
 
-  //////////////////////////////////////////////////////////////////////////////
+  // WAITING FOR NETWORK ///////////////////////////////////////////////////////
   SerialMon.print("Waiting for network...");
   if (!modem.waitForNetwork()) {
     SerialMon.println(" fail");
@@ -613,6 +632,7 @@ void setup()
 
   if (modem.isNetworkConnected()) { SerialMon.println("Network connected"); }
 
+  // CONNECT ///////////////////////////////////////////////////////////////////
   // GPRS connection parameters are usually set after network registration
   SerialMon.print(F("Connecting to "));
   SerialMon.print(APN);
@@ -633,16 +653,18 @@ void setup()
   pinMode(LED_PIN, OUTPUT);
 
   // SMS ///////////////////////////////////////////////////////////////////////
-  // String imei = modem.getIMEI();
-  // bool res = modem.sendSMS(SMS_TARGET, String("Hello from ") + imei);
-  // SerialMon.print("SMS: ");
-  // if (res)
-  // {
-  //   SerialMon.println("OK");
-  // } else {
-  //   SerialMon.println("fail");
-  // }
-
+#define ENABLE_TEST_SMS 0
+#if ENABLE_TEST_SMS
+  String imei = modem.getIMEI();
+  bool res = modem.sendSMS(SMS_TARGET, String("Hello from ") + imei);
+  SerialMon.print("SMS: ");
+  if (res)
+  {
+    SerialMon.println("OK");
+  } else {
+    SerialMon.println("fail");
+  }
+#endif
   // NIST TIME /////////////////////////////////////////////////////////////////
   modem.NTPServerSync("132.163.96.5", 20);
 
@@ -655,11 +677,7 @@ void setup()
   float timezone = 0;
   for (int8_t i = 5; i; i--) {
     SerialMon.println("Requesting current network time");
-    if (modem.getNetworkTime(&year3, &month3, &day3, &hour3, &min3, &sec3,
-                             &timezone)) {
-      // DBG("Year:", year3, "\tMonth:", month3, "\tDay:", day3);
-      // DBG("Hour:", hour3, "\tMinute:", min3, "\tSecond:", sec3);
-      // DBG("Timezone:", timezone);
+    if (modem.getNetworkTime(&year3, &month3, &day3, &hour3, &min3, &sec3, &timezone)) {
       break;
     } else {
       SerialMon.println("Couldn't get network time, retrying in 15s.");
