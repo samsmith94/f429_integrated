@@ -146,9 +146,9 @@ HardwareSerial Serial1(PG9, PG14);
 // Never prepend http://
 #define HTTP_SERVER           "water-minilab.herokuapp.com"
 #if defined(USE_HTTPS)
-#define HTTP_PORT             80
-#else
 #define HTTP_PORT             443
+#else
+#define HTTP_PORT             80
 #endif
 
 #define ZIP_RESOURCE_ENDPOINT "/download"
@@ -487,8 +487,8 @@ void setup()
   //////////////////////////////////////////////////////////////////////////////
   // TESTING LIMIT SWITCH INTERRUPTS ///////////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////////
-  pinMode(USER_BUTTON, INPUT);
-  attachInterrupt(digitalPinToInterrupt(USER_BUTTON), user_button_ISR, FALLING);
+  // pinMode(USER_BUTTON, INPUT);
+  // attachInterrupt(digitalPinToInterrupt(USER_BUTTON), user_button_ISR, FALLING);
 
 #define ENABLE_TEST_INTERRUPTS 0
 #if ENABLE_TEST_INTERRUPTS

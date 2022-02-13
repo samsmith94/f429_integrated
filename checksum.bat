@@ -22,4 +22,6 @@ del signed_app.hex
 
 tar.exe -a -cf application.zip application.bin
 
+copy application.bin signed_app.bin
+
 @REM pause
