@@ -152,10 +152,12 @@ HardwareSerial Serial1(PG9, PG14);
 #endif
 
 #define ZIP_RESOURCE_ENDPOINT "/download"
-#define ZIP_RESOURCE_CRC32    0xDC6DD831
-#define ZIP_RESOURCE_FILESIZE 50338
+//#define ZIP_RESOURCE_CRC32    0xDC6DD831
+//#define ZIP_RESOURCE_FILESIZE 50338
 
 #define BINARY_SIZE_ENDPOINT  "/binarysize"
+
+#define ZIP_FILE_CHECKSUM_ENDPOINT  "/checksum"
 
 #define POST_DATA_ENDPOINT    "/upload"
 
@@ -340,7 +342,7 @@ void sw8_ISR()
 void setup()
 {
   Serial.begin(115200);
-  Serial.println("Water minilab");
+  Serial.println("Water minilab integrated");
 
   //////////////////////////////////////////////////////////////////////////////
   // TESTING FILE LOGGER ///////////////////////////////////////////////////////
@@ -688,6 +690,99 @@ void setup()
   String time = modem.getGSMDateTime(DATE_FULL);
   SerialMon.print("Current Network Time:"); SerialMon.println(time);
 
+
+  // HTTP GET REQUEST //////////////////////////////////////////////////////////
+  SerialMon.print(F("Performing HTTP GET request (/binarysize)... "));
+  int err = http.get(BINARY_SIZE_ENDPOINT);
+  if (err != 0) {
+    SerialMon.println(F("failed to connect"));
+    delay(10000);
+    return;
+  }
+
+  int status = http.responseStatusCode();
+  SerialMon.print(F("Response status code: "));
+  SerialMon.println(status);
+  if (!status) {
+    delay(10000);
+    return;
+  }
+
+  SerialMon.println(F("Response Headers:"));
+  while (http.headerAvailable()) {
+    String headerName  = http.readHeaderName();
+    String headerValue = http.readHeaderValue();
+    SerialMon.println("    " + headerName + " : " + headerValue);
+  }
+
+  int length = http.contentLength();
+  if (length >= 0) {
+    SerialMon.print(F("Content length is: "));
+    SerialMon.println(length);
+  }
+  if (http.isResponseChunked()) {
+    SerialMon.println(F("The response is chunked"));
+  }
+
+  int zip_resource_filesize = -1;
+  String body = http.responseBody();
+  SerialMon.println(F("Response:"));
+  SerialMon.println(body);
+  zip_resource_filesize = body.toInt();
+
+  SerialMon.print(F("Body length is: "));
+  SerialMon.println(body.length());
+
+  delay(1000);
+
+  // HTTP GET REQUEST //////////////////////////////////////////////////////////
+  SerialMon.print(F("Performing HTTP GET request (/checksum)... "));
+  err = http.get(ZIP_FILE_CHECKSUM_ENDPOINT);
+  if (err != 0) {
+    SerialMon.println(F("failed to connect"));
+    delay(10000);
+    return;
+  }
+
+  status = http.responseStatusCode();
+  SerialMon.print(F("Response status code: "));
+  SerialMon.println(status);
+  if (!status) {
+    delay(10000);
+    return;
+  }
+
+  SerialMon.println(F("Response Headers:"));
+  while (http.headerAvailable()) {
+    String headerName  = http.readHeaderName();
+    String headerValue = http.readHeaderValue();
+    SerialMon.println("    " + headerName + " : " + headerValue);
+  }
+
+  length = http.contentLength();
+  if (length >= 0) {
+    SerialMon.print(F("Content length is: "));
+    SerialMon.println(length);
+  }
+  if (http.isResponseChunked()) {
+    SerialMon.println(F("The response is chunked"));
+  }
+
+  long long int zip_resource_crc32 = -1;
+  body = http.responseBody();
+  char charBuf[50] = {'\0'};
+  body.toCharArray(charBuf, 50);
+
+  SerialMon.println(F("Response:"));
+  SerialMon.println(body);
+  zip_resource_crc32 = strtoll(charBuf, NULL, 16);
+  
+
+  SerialMon.print(F("Body length is: "));
+  SerialMon.println(body.length());
+
+  delay(1000);
+
   // HTTP ZIP DOWNLOAD /////////////////////////////////////////////////////////
   // Create a application.bin file to write RAM to SD card
   if (!downloadedZIPFile.open("application.zip", O_WRONLY | O_CREAT))
@@ -793,7 +888,7 @@ void setup()
   uint32_t readLength = 0;
   CRC32    crc;
 
-  if (finishedHeader && contentLength == ZIP_RESOURCE_FILESIZE) {
+  if (finishedHeader && contentLength == zip_resource_filesize) {
     SerialMon.println(F("Reading response data"));
     clientReadStartTime = millis();
 
@@ -834,54 +929,16 @@ void setup()
   SerialMon.print("Actually read:  ");
   SerialMon.println(readLength);
   SerialMon.print("Calc. CRC32:    0x");
-  SerialMon.println(crc.finalize(), HEX);
+  long long int calculated_crc32 = crc.finalize();
+  SerialMon.println(calculated_crc32, HEX);
   SerialMon.print("Known CRC32:    0x");
-  SerialMon.println(ZIP_RESOURCE_CRC32, HEX);
+  //SerialMon.println(ZIP_RESOURCE_CRC32, HEX);
+  SerialMon.println(zip_resource_crc32, HEX);
   SerialMon.print("Duration:       ");
   SerialMon.print(duration);
   SerialMon.println("s");
 
   downloadedZIPFile.close();
-  
-  // HTTP GET REQUEST //////////////////////////////////////////////////////////
-  SerialMon.print(F("Performing HTTP GET request... "));
-  int err = http.get(BINARY_SIZE_ENDPOINT);
-  if (err != 0) {
-    SerialMon.println(F("failed to connect"));
-    delay(10000);
-    return;
-  }
-
-  int status = http.responseStatusCode();
-  SerialMon.print(F("Response status code: "));
-  SerialMon.println(status);
-  if (!status) {
-    delay(10000);
-    return;
-  }
-
-  SerialMon.println(F("Response Headers:"));
-  while (http.headerAvailable()) {
-    String headerName  = http.readHeaderName();
-    String headerValue = http.readHeaderValue();
-    SerialMon.println("    " + headerName + " : " + headerValue);
-  }
-
-  int length = http.contentLength();
-  if (length >= 0) {
-    SerialMon.print(F("Content length is: "));
-    SerialMon.println(length);
-  }
-  if (http.isResponseChunked()) {
-    SerialMon.println(F("The response is chunked"));
-  }
-
-  String body = http.responseBody();
-  SerialMon.println(F("Response:"));
-  SerialMon.println(body);
-
-  SerialMon.print(F("Body length is: "));
-  SerialMon.println(body.length());
 
   // HTTP POST REQUEST /////////////////////////////////////////////////////////
   delay(1000);
@@ -994,6 +1051,19 @@ void setup()
     binFile.close();
     Serial.println("Now you can remove SD card.");
   }
+
+#define TEST_SELF_RESET
+#if defined(TEST_SELF_RESET)
+  if (zip_resource_crc32 == calculated_crc32) {
+    SerialMon.println("\r\nTarget will reset itself.");
+    SerialMon.println("Starting the bootloader within 3 seconds");
+    delay(3000);
+    HAL_NVIC_SystemReset();
+  }
+  else {
+    SerialMon.println("\r\nCalculated and known CRC32 are not equal.");
+  }
+#endif
 
   // TEST RTC //////////////////////////////////////////////////////////////////
   Serial.println("- configure RTC");
