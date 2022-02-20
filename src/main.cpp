@@ -409,21 +409,22 @@ void setup()
   //////////////////////////////////////////////////////////////////////////////
   // "loop" (itt most csak a dac0 egyik csatornája van tesztelve):
 
-  // a kiadott feszültség értékek duplázódnak 3 másodpercenként (hagyunk időt mérni)
-  // 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048 ====> 12 * 3 = 36 másodperc összesen ez a teszt
+  // a kiadott feszültség értékek duplázódnak 3 másodpercenként
+  // 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048
   
   // a LED karakterisztikája olyan hogy jelentős változások
   // inkább az elején látszódnak, utána egyforma, de ez egy kicsit
   // minden LED-re más lehet, értelemszerűen kalibrálni kell
+  // meg nyilván függ a LED és fotódióda távolságától + oldal fényelnyelésétől
   long measured_value = 0;
   MCP342x::Config adc_status;
   uint8_t adc_err = 0;
 
-  for (int i = 1; i <= 2048; i++) {
+  for (int i = 1; i <= 2048; i=i*2) {
     // DAC output:
     dac1.setVoltageA(i);  // a paraméter mV, tehát a volt ezred része
     dac1.updateDAC();
-    i = i*2;
+    
 
     // ami a DAC-on "A", az az ADC-n "1", a "B" pedig a "2"-esen mérhető
     // tehát a DAC setVoltageA(), az az ADC MCP342x::channel1-én mérhető
@@ -437,7 +438,9 @@ void setup()
       Serial.println(adc_err);
     }
     else {
-      Serial.print("Value: ");
+      Serial.print("DAC value: ");
+      Serial.print(i);
+      Serial.print(". => ADC value: ");
       Serial.println(measured_value);
     }
     delay(3000);

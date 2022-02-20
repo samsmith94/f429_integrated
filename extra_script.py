@@ -78,9 +78,25 @@ def after_upload(source, target, env):
 
 def after_build(source, target, env):
     # print("After build")
-    # env.Execute("node --version")
+
+    # create .hex file from .elf
     env.Execute("arm-none-eabi-objcopy -O ihex $BUILD_DIR/${PROGNAME}.elf $BUILD_DIR/${PROGNAME}.hex")
-    env.Execute("start checksum.bat")
+    
+    # fill gaps
+    env.Execute("srec_cat $BUILD_DIR/${PROGNAME}.hex -Intel -fill 0xFF 0x08080000 0x080E0000 -o filled.hex -Intel -line-length=44")
+    # sign
+    env.Execute("srec_cat filled.hex -Intel -crop 0x08080000 0x080DFFFC -STM32 0x080DFFFC -o signed_app.hex -Intel")
+    # create .bin from .hex
+    env.Execute("arm-none-eabi-objcopy --input-target=ihex --output-target=binary signed_app.hex application.bin")
+    # delete unnecessary files
+    env.Execute("del filled.hex")
+    env.Execute("del signed_app.hex")
+
+    # compress .bin to .zip
+    env.Execute("tar.exe -a -cf application.zip application.bin")
+    
+
+    #env.Execute("start checksum.bat")
     print("application.zip file created")
 
 env.AddPostAction("checkprogsize", after_build)

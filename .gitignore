@@ -7,3 +7,5 @@
 application.bin
 application.zip
 *.bak
+
+.env
