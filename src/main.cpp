@@ -25,6 +25,33 @@
 #include <ArduinoJson.h>
 #include <DebugLog.h>
 
+#include <MCP48xx.h>
+
+#include <Wire.h>
+#include <MCP342x.h>
+
+/******************************************************************************
+ ** Global variables and functions for Colorimeter ****************************
+ ******************************************************************************/
+//SPI DAC
+// 3 panel, egyenként 2 DAC
+MCP4822 dac1(SPI_SS_1); // PF2 pin (legfelső fehér csati)
+//MCP4822 dac2(SPI_SS_2); // egyel alatta
+//MCP4822 dac1(SPI_SS_3); // még egyell alatta
+
+// I2C ADC
+// ez az alapértelmezett cím, de 3 panel esetén majd ezt is be kell állítani
+// a spectro panel alján van a jumper amivel 2^3=8 fajta címet lehet beállítani
+uint8_t address1 = 0x68;
+MCP342x adc1 = MCP342x(address1);
+
+// uint8_t address2 = ...;
+// MCP342x adc2 = MCP342x(address2);
+
+// uint8_t address3 = ...;
+// MCP342x adc3 = MCP342x(address3);
+
+
 /******************************************************************************
  ** Global variables and functions for DebugLog *******************************
  ******************************************************************************/
@@ -343,6 +370,80 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println("Water minilab integrated");
+
+  //////////////////////////////////////////////////////////////////////////////
+  // TESTING SPECTRO BOARD /////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////
+  // DAC setup
+  dac1.init();
+
+  dac1.turnOnChannelA();
+  dac1.turnOnChannelB();
+
+  dac1.setGainA(MCP4822::High);
+  dac1.setGainB(MCP4822::High);
+
+  // ugyanezeket kell majd végigcsinálni a dac2 és dac3-ra is...
+  //...
+
+  //////////////////////////////////////////////////////////////////////////////
+  // ADC setup
+  Wire.begin();
+
+  // Reset devices
+  MCP342x::generalCallReset();
+  delay(1); // MC342x needs 300us to settle, wait 1ms
+
+  // Check device present
+  Wire.requestFrom(address1, (uint8_t)1);
+  if (!Wire.available()) {
+    Serial.print("No device found at address ");
+    Serial.println(address1, HEX);
+    while (1)
+      ;
+  }
+
+  // ugyanezeket kell majd végigcsinálni address2 és address3-al
+  // ...
+
+  //////////////////////////////////////////////////////////////////////////////
+  // "loop" (itt most csak a dac0 egyik csatornája van tesztelve):
+
+  // a kiadott feszültség értékek duplázódnak 3 másodpercenként (hagyunk időt mérni)
+  // 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048 ====> 12 * 3 = 36 másodperc összesen ez a teszt
+  
+  // a LED karakterisztikája olyan hogy jelentős változások
+  // inkább az elején látszódnak, utána egyforma, de ez egy kicsit
+  // minden LED-re más lehet, értelemszerűen kalibrálni kell
+  long measured_value = 0;
+  MCP342x::Config adc_status;
+  uint8_t adc_err = 0;
+
+  for (int i = 1; i <= 2048; i++) {
+    // DAC output:
+    dac1.setVoltageA(i);  // a paraméter mV, tehát a volt ezred része
+    dac1.updateDAC();
+    i = i*2;
+
+    // ami a DAC-on "A", az az ADC-n "1", a "B" pedig a "2"-esen mérhető
+    // tehát a DAC setVoltageA(), az az ADC MCP342x::channel1-én mérhető
+    //ADC input:
+    
+    
+    // Initiate a conversion; convertAndRead() will wait until it can be read
+    adc_err = adc1.convertAndRead(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, measured_value, adc_status);
+    if (adc_err) {
+      Serial.print("Convert error: ");
+      Serial.println(adc_err);
+    }
+    else {
+      Serial.print("Value: ");
+      Serial.println(measured_value);
+    }
+    delay(3000);
+    //látható hogy nem lesz lineáris! Dupla kiadott feszültséghez, nem végig dupla mért ADC érték tartozik
+  }
+
 
   //////////////////////////////////////////////////////////////////////////////
   // TESTING FILE LOGGER ///////////////////////////////////////////////////////
