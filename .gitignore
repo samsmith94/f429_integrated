@@ -4,5 +4,6 @@
 .vscode/launch.json
 .vscode/ipch
 
-*.bin
-*.zip
+application.bin
+application.zip
+*.bak
